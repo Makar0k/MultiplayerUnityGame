@@ -101,8 +101,19 @@ public class MPClient : MonoBehaviour
         {
             if(recievedPackage.players[i].mp_id == MPid)
             {
-                clientPlayer.GetComponent<PlayerController>().SetHealth(recievedPackage.players[i].health);
-                clientPlayer.GetComponent<PlayerController>().killCount = recievedPackage.players[i].killCount;
+                var clientp = clientPlayer.GetComponent<PlayerController>();
+                clientp.SetHealth(recievedPackage.players[i].health);
+                clientp.killCount = recievedPackage.players[i].killCount;
+                
+                if(recievedPackage.players[i].health <= 0)
+                    {
+                        Debug.Log("фыфыв " + recievedPackage.players[i].ragdollPositions.Count);
+                        for(int d = 0; d < recievedPackage.players[i].ragdollPositions.Count; d++)
+                        {
+                            clientp.ragdollEntities[d].rotation = Quaternion.Euler(MPClient.ConvertVector3(recievedPackage.players[i].ragdollRotations[d]));
+                            clientp.ragdollEntities[d].position = MPClient.ConvertVector3(recievedPackage.players[i].ragdollPositions[d]);
+                        }
+                    }
                 continue;
             }
             int getid = GetPlayer(playersInfo, recievedPackage.players[i].mp_id);
@@ -119,6 +130,14 @@ public class MPClient : MonoBehaviour
                 mppuppet.killCount = recievedPackage.players[i].killCount;
                 mppuppet.fightAnimType = playerInst.fightAnimType;
                 mppuppet.latestSpeed = playerInst.speed;
+                if(playerInst.health <= 0)
+                    {
+                        for(int d = 0; d < playerInst.ragdollPositions.Count; d++)
+                        {
+                            mppuppet.ragdollEntities[d].rotation = Quaternion.Euler(MPClient.ConvertVector3(playerInst.ragdollRotations[d]));
+                            mppuppet.ragdollEntities[d].position = MPClient.ConvertVector3(playerInst.ragdollPositions[d]);
+                        }
+                    }
                 if(recievedPackage.players[i].isDisconnected) 
                 {
                     Destroy(playersInfo[getid].gameObject);
@@ -234,7 +253,7 @@ public class MPClient : MonoBehaviour
                 }
             }
         }
-        foreach(var cmd in recievedPackage.cmdsSheldue)
+        /*foreach(var cmd in recievedPackage.cmdsSheldue)
         {
             switch(cmd.type)
             {
@@ -255,7 +274,7 @@ public class MPClient : MonoBehaviour
                     break;
                 }
             }
-        }
+        */
         if(warmupPanel != null)
         {
             if(recievedPackage.guiData.isWarmupShown)
@@ -476,6 +495,8 @@ public class MPClient : MonoBehaviour
         public bool isBulletRequested = false;
         public MPBulletInfo bulletInfo = null;
         public float health = 100;
+        public List<MPVector3> ragdollPositions = null;
+        public List<MPVector3> ragdollRotations = null;
     }
     [Serializable]
     public class MPNpcInfo

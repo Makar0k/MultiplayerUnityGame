@@ -11,6 +11,7 @@ public abstract class PhysPuppet : MonoBehaviour
     [SerializeField]
     [Header("Animation Rigging")]
     private RigBuilder rig;
+    public List<Transform> ragdollEntities;
     [SerializeField]
     private MultiAimConstraint faceBoneComponent;
     [SerializeField]
@@ -21,7 +22,7 @@ public abstract class PhysPuppet : MonoBehaviour
     public int fightAnimType = 0;
     [Header("Physics")]
     [SerializeField]
-    private Transform ragdoll;
+    public Transform ragdoll;
     public float speed;
     [SerializeField]
     protected Rigidbody rb;
@@ -71,7 +72,7 @@ public abstract class PhysPuppet : MonoBehaviour
     }
     protected void Start()
     {
-
+        ragdollEntities = GetRagdollParts();
         SetAnimatorInt("FightAnimType", fightAnimType);
         TurnRagdoll(false);
         if(coloredPart != null)
@@ -179,6 +180,15 @@ public abstract class PhysPuppet : MonoBehaviour
                     CallIdleAnimation(idleAnimId);
                 }
         }
+    }
+    public List<Transform> GetRagdollParts()
+    {
+        var resultList = new List<Transform>();
+        foreach(var element in ragdoll.GetComponentsInChildren<Transform>())
+        {
+            resultList.Add(element);
+        }
+        return resultList;
     }
     public void SetModelColor(Color color, GameObject model)
     {

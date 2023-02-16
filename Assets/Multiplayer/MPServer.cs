@@ -101,6 +101,7 @@ public class MPServer : MonoBehaviour
             
                 playersInfo[i].gameObject = Instantiate(CubeTest, new Vector3(playersInfo[i].info.x, playersInfo[i].info.y, playersInfo[i].info.z), Quaternion.Euler(new Vector3(0, playersInfo[i].info.rot, 0)));
                 var mppuppet = playersInfo[i].gameObject.GetComponent<MPPuppet>();
+                mppuppet.isServerSide = true;
                 mppuppet.id = playersInfo[i].info.mp_id;
                 mppuppet.inBattle = playersInfo[i].info.inBattle;
                 mppuppet.fightAnimType = playersInfo[i].info.fightAnimType;
@@ -111,6 +112,7 @@ public class MPServer : MonoBehaviour
             else
             {
                 var mppuppet = playersInfo[i].gameObject.GetComponent<MPPuppet>();
+                mppuppet.isServerSide = true;
                 playersInfo[i].gameObject.transform.position = Vector3.Lerp(playersInfo[i].gameObject.transform.position, new Vector3(playersInfo[i].info.x, playersInfo[i].info.y, playersInfo[i].info.z), Time.fixedDeltaTime * 10f);
                 playersInfo[i].gameObject.transform.rotation = Quaternion.Lerp(playersInfo[i].gameObject.transform.rotation, Quaternion.Euler(new Vector3(playersInfo[i].gameObject.transform.rotation.eulerAngles.x, playersInfo[i].info.rot, playersInfo[i].gameObject.transform.rotation.eulerAngles.z)), Time.fixedDeltaTime * 10);
                 mppuppet.fightAnimType = playersInfo[i].info.fightAnimType;
@@ -154,9 +156,20 @@ public class MPServer : MonoBehaviour
                             nonThreadPlayerInfo.Add(new PlayerInfo());
                             nonThreadPlayerInfo[i].info = new MPClient.MPClientInfo();
                         }
-                        Debug.Log("Sending player " + playersInfo[i].info.mp_id + " that his killcount is " + playersInfo[i].info.killCount);
-                        nonThreadPlayerInfo[i].info.health = playersInfo[i].gameObject.GetComponent<PhysPuppet>().GetHealth();
-                        nonThreadPlayerInfo[i].info.killCount =  playersInfo[i].gameObject.GetComponent<PhysPuppet>().killCount;
+                        else
+                        {
+                            Debug.Log("Sending player " + playersInfo[i].info.mp_id + " that his killcount is " + playersInfo[i].info.killCount);
+                            nonThreadPlayerInfo[i].info.health = playersInfo[i].gameObject.GetComponent<PhysPuppet>().GetHealth();
+                            Debug.Log("RagdollEntities " + playersInfo[i].gameObject.GetComponent<PhysPuppet>().ragdollEntities.Count);
+                            nonThreadPlayerInfo[i].info.ragdollPositions = new List<MPClient.MPVector3>();
+                            nonThreadPlayerInfo[i].info.ragdollRotations = new List<MPClient.MPVector3>();
+                            foreach(var element in playersInfo[i].gameObject.GetComponent<PhysPuppet>().ragdollEntities)
+                            {
+                                nonThreadPlayerInfo[i].info.ragdollPositions.Add(new MPClient.MPVector3(element.position.x, element.position.y, element.position.z));
+                                nonThreadPlayerInfo[i].info.ragdollRotations.Add(new MPClient.MPVector3(element.rotation.eulerAngles.x, element.rotation.eulerAngles.y, element.rotation.eulerAngles.z));
+                            }
+                            nonThreadPlayerInfo[i].info.killCount =  playersInfo[i].gameObject.GetComponent<PhysPuppet>().killCount;
+                        }
                     }
                 }
                 // HOST SYNC
@@ -164,10 +177,19 @@ public class MPServer : MonoBehaviour
                 var positon = hostPlayer.transform.position;
                 var playerRot = hostPlayer.transform.rotation.eulerAngles.y;
                 var lookObj = playerController.cursor.transform.position;
+                var hostRagdollParts = new List<MPClient.MPVector3>();
+                var hostRagdollPartsRot = new List<MPClient.MPVector3>();
+                foreach(var element in playerController.ragdollEntities)
+                {
+                    hostRagdollPartsRot.Add(new MPClient.MPVector3(element.rotation.eulerAngles.x, element.rotation.eulerAngles.y, element.rotation.eulerAngles.z));
+                    hostRagdollParts.Add(new MPClient.MPVector3(element.position.x, element.position.y, element.position.z));
+                }
                 hostPlayerInfo = new MPClient.MPClientInfo() {
                     x = positon.x,
                     y = positon.y,
                     z = positon.z,
+                    ragdollPositions = ((!playerController.ragdoll.GetComponent<Rigidbody>().isKinematic) ? hostRagdollParts : null),
+                    ragdollRotations = ((!playerController.ragdoll.GetComponent<Rigidbody>().isKinematic) ? hostRagdollPartsRot : null),
                     speed = playerController.speed,
                     health = playerController.GetHealth(),
                     look_x = lookObj.x,
@@ -272,6 +294,8 @@ public class MPServer : MonoBehaviour
                     playersInfo[ind].info = data;
                     playersInfo[ind].conTimeOut = 0;
                     playersInfo[ind].info.health = nonThreadPlayerInfo[ind].info.health;
+                    playersInfo[ind].info.ragdollRotations = nonThreadPlayerInfo[ind].info.ragdollRotations;
+                    playersInfo[ind].info.ragdollPositions = nonThreadPlayerInfo[ind].info.ragdollPositions;
                     playersInfo[ind].info.killCount = nonThreadPlayerInfo[ind].info.killCount;
                 }
                 package.mp_id = data.mp_id;
