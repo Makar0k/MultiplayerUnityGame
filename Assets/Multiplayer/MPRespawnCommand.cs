@@ -6,7 +6,7 @@ using System;
 [Serializable]
 public class MPRespawnCommand : MPCommand
 {
-    public MPClient.MPVector3 respawnPosition;
+    public MPVector3 respawnPosition;
     public int idOfPlayerToRespawn;
     new public MPCommand.CommandType type = MPCommand.CommandType.RespawnPlayer;
 }

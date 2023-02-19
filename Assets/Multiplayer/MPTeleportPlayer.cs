@@ -6,5 +6,5 @@ using System;
 [Serializable]
 public class MPTeleportPlayer : MPCommand
 {
-    public MPClient.MPVector3 positionToMove;
+    public MPVector3 positionToMove;
 }

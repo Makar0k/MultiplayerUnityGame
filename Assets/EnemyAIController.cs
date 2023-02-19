@@ -76,8 +76,8 @@ public class EnemyAIController : AIController
                     if(player.info.health > 0)
                     {
                         lastDist = distToPlayer;
-                        destination = player.gameObject;
-                        lookAtObject = player.gameObject;
+                        destination = player.playerGameObject;
+                        lookAtObject = player.playerGameObject;
                     }
                 }
             }

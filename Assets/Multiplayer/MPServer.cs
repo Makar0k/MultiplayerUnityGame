@@ -37,7 +37,7 @@ public class MPServer : MonoBehaviour
     PhysPuppet hostPlayerPhysPuppet;
     int lastBulletId = 0;
     int lastNpcId = 0;
-    protected MPClient.MPClientInfo hostPlayerInfo;
+    protected MPClientInfo hostPlayerInfo;
     [Header("A GUI Stuff")]
     [SerializeField]
     GameObject warmupPanel;
@@ -84,46 +84,46 @@ public class MPServer : MonoBehaviour
             {
                 continue;
             }
-            player.conTimeOut += 1;
+            /*player.conTimeOut += 1;
             if(player.conTimeOut > 500)
             {
                 player.info.isDisconnected = true;
-                Destroy(player.gameObject.gameObject);
+                Destroy(player.playerGameObject.gameObject);
                 playersInfo.Remove(player);
                 playersCount -= 1;
                 Debug.Log("Player " + player.info.mp_id + " is disconnected");
-            }
+            }*/
         }
         for(int i = 0; i < playersInfo.Count; i++)
         {
-            if(playersInfo[i].gameObject == null)
+            if(playersInfo[i].playerGameObject == null)
             {
             
-                playersInfo[i].gameObject = Instantiate(CubeTest, new Vector3(playersInfo[i].info.x, playersInfo[i].info.y, playersInfo[i].info.z), Quaternion.Euler(new Vector3(0, playersInfo[i].info.rot, 0)));
-                var mppuppet = playersInfo[i].gameObject.GetComponent<MPPuppet>();
+                playersInfo[i].playerGameObject = Instantiate(CubeTest, new Vector3(playersInfo[i].info.x, playersInfo[i].info.y, playersInfo[i].info.z), Quaternion.Euler(new Vector3(0, playersInfo[i].info.rot, 0)));
+                var mppuppet = playersInfo[i].playerGameObject.GetComponent<MPPuppet>();
                 mppuppet.isServerSide = true;
                 mppuppet.id = playersInfo[i].info.mp_id;
                 mppuppet.inBattle = playersInfo[i].info.inBattle;
                 mppuppet.fightAnimType = playersInfo[i].info.fightAnimType;
-                mppuppet.viewObject.transform.position = Vector3.Lerp(playersInfo[i].gameObject.GetComponent<MPPuppet>().viewObject.transform.position, new Vector3(playersInfo[i].info.look_x, playersInfo[i].info.look_y, playersInfo[i].info.look_z), Time.fixedDeltaTime * 10);
+                mppuppet.viewObject.transform.position = Vector3.Lerp(playersInfo[i].playerGameObject.GetComponent<MPPuppet>().viewObject.transform.position, new Vector3(playersInfo[i].info.look_x, playersInfo[i].info.look_y, playersInfo[i].info.look_z), Time.fixedDeltaTime * 10);
                 mppuppet.latestSpeed = playersInfo[i].info.speed;
                 mppuppet.CheckBattleState();
             }
             else
             {
-                var mppuppet = playersInfo[i].gameObject.GetComponent<MPPuppet>();
+                var mppuppet = playersInfo[i].playerGameObject.GetComponent<MPPuppet>();
                 mppuppet.isServerSide = true;
-                playersInfo[i].gameObject.transform.position = Vector3.Lerp(playersInfo[i].gameObject.transform.position, new Vector3(playersInfo[i].info.x, playersInfo[i].info.y, playersInfo[i].info.z), Time.fixedDeltaTime * 10f);
-                playersInfo[i].gameObject.transform.rotation = Quaternion.Lerp(playersInfo[i].gameObject.transform.rotation, Quaternion.Euler(new Vector3(playersInfo[i].gameObject.transform.rotation.eulerAngles.x, playersInfo[i].info.rot, playersInfo[i].gameObject.transform.rotation.eulerAngles.z)), Time.fixedDeltaTime * 10);
+                playersInfo[i].playerGameObject.transform.position = Vector3.Lerp(playersInfo[i].playerGameObject.transform.position, new Vector3(playersInfo[i].info.x, playersInfo[i].info.y, playersInfo[i].info.z), Time.fixedDeltaTime * 10f);
+                playersInfo[i].playerGameObject.transform.rotation = Quaternion.Lerp(playersInfo[i].playerGameObject.transform.rotation, Quaternion.Euler(new Vector3(playersInfo[i].playerGameObject.transform.rotation.eulerAngles.x, playersInfo[i].info.rot, playersInfo[i].playerGameObject.transform.rotation.eulerAngles.z)), Time.fixedDeltaTime * 10);
                 mppuppet.fightAnimType = playersInfo[i].info.fightAnimType;
                 mppuppet.inBattle = playersInfo[i].info.inBattle;
                 mppuppet.latestSpeed = playersInfo[i].info.speed;
-                mppuppet.viewObject.transform.position = Vector3.Lerp(playersInfo[i].gameObject.GetComponent<MPPuppet>().viewObject.transform.position, new Vector3(playersInfo[i].info.look_x, playersInfo[i].info.look_y, playersInfo[i].info.look_z), Time.fixedDeltaTime * 10);
+                mppuppet.viewObject.transform.position = Vector3.Lerp(playersInfo[i].playerGameObject.GetComponent<MPPuppet>().viewObject.transform.position, new Vector3(playersInfo[i].info.look_x, playersInfo[i].info.look_y, playersInfo[i].info.look_z), Time.fixedDeltaTime * 10);
             }
             if(playersInfo[i].info.isBulletRequested)
             {
                 playersInfo[i].info.isBulletRequested = false;
-                RequestBullet(MPClient.ConvertVector3(playersInfo[i].info.bulletInfo.position), Quaternion.Euler(MPClient.ConvertVector3(playersInfo[i].info.bulletInfo.rot)), MPClient.ConvertVector3(playersInfo[i].info.bulletInfo.velocity), i);   
+                RequestBullet(MPVector3.ConvertVector3(playersInfo[i].info.bulletInfo.position), Quaternion.Euler(MPVector3.ConvertVector3(playersInfo[i].info.bulletInfo.rot)), MPVector3.ConvertVector3(playersInfo[i].info.bulletInfo.velocity), i);   
             }
         }
         UpdateScoreboard();
@@ -146,45 +146,50 @@ public class MPServer : MonoBehaviour
             //sListener.Listen(10);
             while (true)
             {
+                Debug.Log("1");
                 // NON THREADABLE INFO. ДИКИЙ КОСТЫЛЬ ДЛЯ ТОГО ЧТОБЫ ПЕРЕДАТЬ В Task ДАННЫЕ ВНЕ НЕГО.
                 for (int i = 0; i < playersInfo.Count; i++)
                 {
-                    if(playersInfo[i] != null)
+                    if(playersInfo[i].info != null)
                     {
+                        Debug.Log("111");
                         if(nonThreadPlayerInfo.ElementAtOrDefault(i) == null)
                         {
+                            Debug.Log("1111");
                             nonThreadPlayerInfo.Add(new PlayerInfo());
-                            nonThreadPlayerInfo[i].info = new MPClient.MPClientInfo();
+                            nonThreadPlayerInfo[i].info = new MPClientInfo();
                         }
                         else
                         {
                             Debug.Log("Sending player " + playersInfo[i].info.mp_id + " that his killcount is " + playersInfo[i].info.killCount);
                             nonThreadPlayerInfo[i].info.health = playersInfo[i].gameObject.GetComponent<PhysPuppet>().GetHealth();
                             Debug.Log("RagdollEntities " + playersInfo[i].gameObject.GetComponent<PhysPuppet>().ragdollEntities.Count);
-                            nonThreadPlayerInfo[i].info.ragdollPositions = new List<MPClient.MPVector3>();
-                            nonThreadPlayerInfo[i].info.ragdollRotations = new List<MPClient.MPVector3>();
+                            nonThreadPlayerInfo[i].info.ragdollPositions = new List<MPVector3>();
+                            nonThreadPlayerInfo[i].info.ragdollRotations = new List<MPVector3>();
                             foreach(var element in playersInfo[i].gameObject.GetComponent<PhysPuppet>().ragdollEntities)
                             {
-                                nonThreadPlayerInfo[i].info.ragdollPositions.Add(new MPClient.MPVector3(element.position.x, element.position.y, element.position.z));
-                                nonThreadPlayerInfo[i].info.ragdollRotations.Add(new MPClient.MPVector3(element.rotation.eulerAngles.x, element.rotation.eulerAngles.y, element.rotation.eulerAngles.z));
+                                nonThreadPlayerInfo[i].info.ragdollPositions.Add(new MPVector3(element.position.x, element.position.y, element.position.z));
+                                nonThreadPlayerInfo[i].info.ragdollRotations.Add(new MPVector3(element.rotation.eulerAngles.x, element.rotation.eulerAngles.y, element.rotation.eulerAngles.z));
                             }
                             nonThreadPlayerInfo[i].info.killCount =  playersInfo[i].gameObject.GetComponent<PhysPuppet>().killCount;
                         }
                     }
                 }
+                Debug.Log("2");
                 // HOST SYNC
                 var playerController = hostPlayer.GetComponent<PlayerController>();
                 var positon = hostPlayer.transform.position;
                 var playerRot = hostPlayer.transform.rotation.eulerAngles.y;
                 var lookObj = playerController.cursor.transform.position;
-                var hostRagdollParts = new List<MPClient.MPVector3>();
-                var hostRagdollPartsRot = new List<MPClient.MPVector3>();
+                var hostRagdollParts = new List<MPVector3>();
+                var hostRagdollPartsRot = new List<MPVector3>();
                 foreach(var element in playerController.ragdollEntities)
                 {
-                    hostRagdollPartsRot.Add(new MPClient.MPVector3(element.rotation.eulerAngles.x, element.rotation.eulerAngles.y, element.rotation.eulerAngles.z));
-                    hostRagdollParts.Add(new MPClient.MPVector3(element.position.x, element.position.y, element.position.z));
+                    hostRagdollPartsRot.Add(new MPVector3(element.rotation.eulerAngles.x, element.rotation.eulerAngles.y, element.rotation.eulerAngles.z));
+                    hostRagdollParts.Add(new MPVector3(element.position.x, element.position.y, element.position.z));
                 }
-                hostPlayerInfo = new MPClient.MPClientInfo() {
+                Debug.Log("3");
+                hostPlayerInfo = new MPClientInfo() {
                     x = positon.x,
                     y = positon.y,
                     z = positon.z,
@@ -204,27 +209,29 @@ public class MPServer : MonoBehaviour
                 var clientWarmuptime = warmupTime;
                 var clientIsWarmuped = warmupPanel.activeSelf;
 
-                var bulletsInfo = new List<MPClient.MPBulletInfo>();
+                var bulletsInfo = new List<MPBulletInfo>();
+                Debug.Log("4");
                 for(int i = 0; i < SynchronizedBullets.Count; i++)
                 {
                     var rb = SynchronizedBullets[i].gameObject.GetComponent<Rigidbody>();
-                    bulletsInfo.Add(new MPClient.MPBulletInfo()
+                    bulletsInfo.Add(new MPBulletInfo()
                     {
                         id = SynchronizedBullets[i].id,
                         lifetime = SynchronizedBullets[i].gameObject.GetComponent<Bullet>().lifetime,
-                        velocity = MPClient.ConvertMPVector3(SynchronizedBullets[i].gameObject.GetComponent<Rigidbody>().velocity),
-                        position = MPClient.ConvertMPVector3(SynchronizedBullets[i].gameObject.transform.position),
+                        velocity = MPVector3.ConvertMPVector3(SynchronizedBullets[i].gameObject.GetComponent<Rigidbody>().velocity),
+                        position = MPVector3.ConvertMPVector3(SynchronizedBullets[i].gameObject.transform.position),
                         owner = SynchronizedBullets[i].gameObject.GetComponent<Bullet>().ownerId,
-                        rot = MPClient.ConvertMPVector3(SynchronizedBullets[i].gameObject.transform.rotation.eulerAngles),
+                        rot = MPVector3.ConvertMPVector3(SynchronizedBullets[i].gameObject.transform.rotation.eulerAngles),
                         isDestroyRequested = (SynchronizedBullets[i].gameObject.activeSelf ? false : true)
                     });
                 }
-                var npcsInfo = new List<MPClient.MPNpcInfo>();
+                var npcsInfo = new List<MPNpcInfo>();
+                Debug.Log("5");
                 for(int i = 0; i < SynchronizedNPCs.Count; i++)
                 {
                     var rb = SynchronizedNPCs[i].gameObject.GetComponent<Rigidbody>();
                     var ai = SynchronizedNPCs[i].gameObject.GetComponent<AIController>();
-                    npcsInfo.Add(new MPClient.MPNpcInfo()
+                    npcsInfo.Add(new MPNpcInfo()
                     {
                         id = SynchronizedNPCs[i].id,
                         type = SynchronizedNPCs[i].type,
@@ -240,12 +247,13 @@ public class MPServer : MonoBehaviour
                         fightAnimType = ai.fightAnimType,
                         modelColor = "#" + ColorUtility.ToHtmlStringRGBA(ai.modelColor),
                         health = ai.GetHealth(),
-                        position = MPClient.ConvertMPVector3(SynchronizedNPCs[i].gameObject.transform.position),
-                        lookPos = MPClient.ConvertMPVector3(ai.lookDirObject.transform.position),
-                        rot = MPClient.ConvertMPVector3(SynchronizedNPCs[i].gameObject.transform.rotation.eulerAngles),
+                        position = MPVector3.ConvertMPVector3(SynchronizedNPCs[i].gameObject.transform.position),
+                        lookPos = MPVector3.ConvertMPVector3(ai.lookDirObject.transform.position),
+                        rot = MPVector3.ConvertMPVector3(SynchronizedNPCs[i].gameObject.transform.rotation.eulerAngles),
                         isDestroyRequested = (SynchronizedNPCs[i].gameObject.activeSelf ? false : true)
                     });
                 }
+                Debug.Log("6");
                 await Task.Run(() => {
                 if(tokenSource.IsCancellationRequested)
                 {
@@ -255,7 +263,7 @@ public class MPServer : MonoBehaviour
                 byte[] bytes = new byte[64000];
                 EndPoint remoteIp = new IPEndPoint(IPAddress.Any, port);
                 var result = sListener.ReceiveFrom(bytes, ref remoteIp);
-                MPClient.MPClientInfo data = MPClient.DeserializeClientInfo(bytes);
+                MPClientInfo data = MPClient.DeserializeClientInfo(bytes);
                 if(data.justGetServerInfo)
                 {
                     var serverInfoOnly = new ClientPackage();
@@ -277,7 +285,7 @@ public class MPServer : MonoBehaviour
                             id = playersCount,
                             ip = remoteIp.ToString(),
                             info = data,
-                            gameObject = null
+                            playerGameObject = null
                         });
                         playersCount++;
                     }
@@ -304,7 +312,7 @@ public class MPServer : MonoBehaviour
                 package.guiData.warmupTime = clientWarmuptime;
                 package.mapId = 1;
                 // Sending Sync Info to Client. 0 player is always host.
-                package.players = new List<MPClient.MPClientInfo>();
+                package.players = new List<MPClientInfo>();
                 package.syncBullets = bulletsInfo;
                 package.syncNPCs = npcsInfo;
                 package.players.Add(hostPlayerInfo);
@@ -315,6 +323,7 @@ public class MPServer : MonoBehaviour
                         package.players.Add(player.info);
                     }
                 }
+                Debug.Log("7");
                 byte[] msg = SerializeClientPackage(package);
                 sListener.SendTo(msg, remoteIp);
                 Debug.Log("" + ((IPEndPoint)remoteIp).ToString());
@@ -348,7 +357,7 @@ public class MPServer : MonoBehaviour
             {
                 mp_id = player.info.mp_id,
                 name = player.info.name,
-                killCount = player.gameObject.GetComponent<MPPuppet>().killCount
+                killCount = player.playerGameObject.GetComponent<MPPuppet>().killCount
             });
         }
         var panel = scoreboardPanel.GetComponent<RectTransform>();
@@ -374,7 +383,6 @@ public class MPServer : MonoBehaviour
             }
             iter++;
         }
-        Debug.Log("" + info.Count + " - " + scoreboardElements.Count);
         if(info.Count < scoreboardElements.Count)
         {
             for(int i = info.Count; i < scoreboardElements.Count; i++)
@@ -386,12 +394,6 @@ public class MPServer : MonoBehaviour
                 Destroy(gobjectToRemove);
             }
         }
-    }
-    public class ScoreboardInfo
-    {
-        public int mp_id;
-        public string name = "Unknown";
-        public int killCount = 0;
     }
     public int FindFreeSlot(List<PlayerInfo> list, int maxPlayers)
     {
@@ -453,28 +455,18 @@ public class MPServer : MonoBehaviour
             });
         lastBulletId++;       
     }
-    public class BulletGameObject
+    public struct BulletGameObject
     {
         public int id;
         public GameObject gameObject;
         public bool isDestroyRequested;
     }
-    public class NPCGameObject
+    public struct NPCGameObject
     {
         public int id;
         public int type;
         public GameObject gameObject;
         public bool isDestroyRequested;
-    }
-    public class PlayerInfo
-    {
-        public int id;
-        public string ip;
-        public int conTimeOut = 0;
-        public bool isDisconnected = false;
-        public MPClient.MPClientInfo info;
-        public Transform gameObject;
-        public List<MPCommand> cmdsSheldue;
     }
     [Serializable]
     public class GUIData
@@ -490,9 +482,9 @@ public class MPServer : MonoBehaviour
         public int mapId;
         public GUIData guiData;
         public List<MPCommand> cmdsSheldue;
-        public List<MPClient.MPClientInfo> players;
-        public List<MPClient.MPBulletInfo> syncBullets;
-        public List<MPClient.MPNpcInfo> syncNPCs;
+        public List<MPClientInfo> players;
+        public List<MPBulletInfo> syncBullets;
+        public List<MPNpcInfo> syncNPCs;
     }
     static public byte[] SerializeClientPackage(ClientPackage info)
     {

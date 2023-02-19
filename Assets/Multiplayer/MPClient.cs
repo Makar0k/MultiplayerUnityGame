@@ -15,7 +15,7 @@ using UnityEngine;
 public class MPClient : MonoBehaviour
 {
     private bool isSocketRevieved = true;
-    public List<MPServer.PlayerInfo> playersInfo;
+    public List<PlayerInfo> playersInfo;
     public string nickname = "A client Dude";
     public int MPid = 0;
     [Header("Connection")]
@@ -66,7 +66,7 @@ public class MPClient : MonoBehaviour
             playerPhysPuppet = clientPlayer.GetComponent<PhysPuppet>();
         }
         ip  = IPAddress.Parse(IPAdress);
-        playersInfo = new List<MPServer.PlayerInfo>();
+        playersInfo = new List<PlayerInfo>();
         tokenSource = new CancellationTokenSource();
         sender = new Socket(ip.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
         sender.SetSocketOption(SocketOptionLevel.Socket,SocketOptionName.ReuseAddress, true);
@@ -110,8 +110,8 @@ public class MPClient : MonoBehaviour
                         Debug.Log("фыфыв " + recievedPackage.players[i].ragdollPositions.Count);
                         for(int d = 0; d < recievedPackage.players[i].ragdollPositions.Count; d++)
                         {
-                            clientp.ragdollEntities[d].rotation = Quaternion.Euler(MPClient.ConvertVector3(recievedPackage.players[i].ragdollRotations[d]));
-                            clientp.ragdollEntities[d].position = MPClient.ConvertVector3(recievedPackage.players[i].ragdollPositions[d]);
+                            clientp.ragdollEntities[d].rotation = Quaternion.Euler(MPVector3.ConvertVector3(recievedPackage.players[i].ragdollRotations[d]));
+                            clientp.ragdollEntities[d].position = MPVector3.ConvertVector3(recievedPackage.players[i].ragdollPositions[d]);
                         }
                     }
                 continue;
@@ -120,10 +120,10 @@ public class MPClient : MonoBehaviour
             if(getid != -1)
             {
                 var playerInst = recievedPackage.players[i];
-                playersInfo[getid].gameObject.transform.position = Vector3.Lerp(playersInfo[getid].gameObject.transform.position, new Vector3(playerInst.x, playerInst.y, playerInst.z), Time.fixedDeltaTime * 10);  
-                playersInfo[getid].gameObject.transform.rotation = Quaternion.Euler(new Vector3(0, playerInst.rot, 0));
+                playersInfo[getid].playerGameObject.transform.position = Vector3.Lerp(playersInfo[getid].playerGameObject.transform.position, new Vector3(playerInst.x, playerInst.y, playerInst.z), Time.fixedDeltaTime * 10);  
+                playersInfo[getid].playerGameObject.transform.rotation = Quaternion.Euler(new Vector3(0, playerInst.rot, 0));
                 playersInfo[getid].info.name = recievedPackage.players[i].name;
-                var mppuppet = playersInfo[getid].gameObject.GetComponent<MPPuppet>();
+                var mppuppet = playersInfo[getid].playerGameObject.GetComponent<MPPuppet>();
                 mppuppet.SetHealth(recievedPackage.players[i].health);
                 mppuppet.viewObject.transform.position =  Vector3.Lerp(mppuppet.viewObject.transform.position, new Vector3(playerInst.look_x, playerInst.look_y, playerInst.look_z), Time.fixedDeltaTime * 5);
                 mppuppet.inBattle = playerInst.inBattle;
@@ -134,13 +134,13 @@ public class MPClient : MonoBehaviour
                     {
                         for(int d = 0; d < playerInst.ragdollPositions.Count; d++)
                         {
-                            mppuppet.ragdollEntities[d].rotation = Quaternion.Euler(MPClient.ConvertVector3(playerInst.ragdollRotations[d]));
-                            mppuppet.ragdollEntities[d].position = MPClient.ConvertVector3(playerInst.ragdollPositions[d]);
+                            mppuppet.ragdollEntities[d].rotation = Quaternion.Euler(MPVector3.ConvertVector3(playerInst.ragdollRotations[d]));
+                            mppuppet.ragdollEntities[d].position = MPVector3.ConvertVector3(playerInst.ragdollPositions[d]);
                         }
                     }
                 if(recievedPackage.players[i].isDisconnected) 
                 {
-                    Destroy(playersInfo[getid].gameObject);
+                    Destroy(playersInfo[getid].playerGameObject);
                     //syncNPCs.RemoveAt(getid);
                 }
             }
@@ -150,7 +150,7 @@ public class MPClient : MonoBehaviour
                 {
                     var playerInst = recievedPackage.players[i];
                     var gobj = Instantiate(testCube, new Vector3(playerInst.x, playerInst.y, playerInst.z),  Quaternion.Euler(new Vector3(0, playerInst.rot, 0)));
-                    playersInfo.Add(new MPServer.PlayerInfo() { gameObject = gobj.transform, info = new MPClient.MPClientInfo() {
+                    playersInfo.Add(new PlayerInfo() { playerGameObject = gobj.transform, info = new MPClientInfo() {
                         mp_id = recievedPackage.players[i].mp_id,
                         name = recievedPackage.players[i].name,
                         killCount = recievedPackage.players[i].killCount
@@ -170,8 +170,8 @@ public class MPClient : MonoBehaviour
             int getid = GetBullet(syncBullets, recievedPackage.syncBullets[i].id);
             if(getid != -1)
             {
-                    syncBullets[getid].obj.transform.position = Vector3.Lerp(syncBullets[getid].obj.transform.position, MPClient.ConvertVector3(recievedPackage.syncBullets[i].position), Time.fixedDeltaTime * 10);  
-                    syncBullets[getid].obj.transform.rotation = Quaternion.Euler(MPClient.ConvertVector3(recievedPackage.syncBullets[i].rot));
+                    syncBullets[getid].obj.transform.position = Vector3.Lerp(syncBullets[getid].obj.transform.position, MPVector3.ConvertVector3(recievedPackage.syncBullets[i].position), Time.fixedDeltaTime * 10);  
+                    syncBullets[getid].obj.transform.rotation = Quaternion.Euler(MPVector3.ConvertVector3(recievedPackage.syncBullets[i].rot));
                     syncBullets[getid].obj.GetComponent<Bullet>().client = this;
                     syncBullets[getid].obj.GetComponent<Bullet>().lifetime = recievedPackage.syncBullets[i].lifetime;
                     syncBullets[getid].obj.GetComponent<Bullet>().ownerId = recievedPackage.syncBullets[i].owner;
@@ -185,7 +185,7 @@ public class MPClient : MonoBehaviour
             {
                 if(recievedPackage.syncBullets[i].lifetime > 0) 
                 {
-                    var gobj = Instantiate(clientPlayer.GetComponent<PlayerController>().bullet_test, MPClient.ConvertVector3(recievedPackage.syncBullets[i].position),  Quaternion.Euler(MPClient.ConvertVector3(recievedPackage.syncBullets[i].rot)));
+                    var gobj = Instantiate(clientPlayer.GetComponent<PlayerController>().bullet_test, MPVector3.ConvertVector3(recievedPackage.syncBullets[i].position),  Quaternion.Euler(MPVector3.ConvertVector3(recievedPackage.syncBullets[i].rot)));
                     syncBullets.Add(new ClientBullet() { obj = gobj, info = new MPBulletInfo() {
                         id = recievedPackage.syncBullets[i].id,
                     }});
@@ -205,11 +205,11 @@ public class MPClient : MonoBehaviour
             int getid = GetNPC(syncNPCs, recievedPackage.syncNPCs[i].id);
             if(getid != -1)
             {
-                    syncNPCs[getid].obj.transform.position = Vector3.Lerp(syncNPCs[getid].obj.transform.position, MPClient.ConvertVector3(recievedPackage.syncNPCs[i].position), Time.fixedDeltaTime * 10);  
-                    syncNPCs[getid].obj.transform.rotation = Quaternion.Euler(MPClient.ConvertVector3(recievedPackage.syncNPCs[i].rot));
+                    syncNPCs[getid].obj.transform.position = Vector3.Lerp(syncNPCs[getid].obj.transform.position, MPVector3.ConvertVector3(recievedPackage.syncNPCs[i].position), Time.fixedDeltaTime * 10);  
+                    syncNPCs[getid].obj.transform.rotation = Quaternion.Euler(MPVector3.ConvertVector3(recievedPackage.syncNPCs[i].rot));
                     var mppuppet = syncNPCs[getid].obj.GetComponent<MPPuppet>();
                     mppuppet.SetHealth(recievedPackage.syncNPCs[i].health);
-                    mppuppet.viewObject.transform.position =  Vector3.Lerp(mppuppet.viewObject.transform.position, MPClient.ConvertVector3(recievedPackage.syncNPCs[i].lookPos), Time.fixedDeltaTime * 5);
+                    mppuppet.viewObject.transform.position =  Vector3.Lerp(mppuppet.viewObject.transform.position, MPVector3.ConvertVector3(recievedPackage.syncNPCs[i].lookPos), Time.fixedDeltaTime * 5);
                     mppuppet.idleAnimId = recievedPackage.syncNPCs[i].idleAnimId;
                     mppuppet.specialIdleAnim = recievedPackage.syncNPCs[i].idleAnim;
                     mppuppet.inBattle = recievedPackage.syncNPCs[i].inBattle;
@@ -230,7 +230,7 @@ public class MPClient : MonoBehaviour
             {
                 if(!recievedPackage.syncNPCs[i].isDestroyRequested)
                 {
-                    var gobj = Instantiate(GameObject.Find("NPCsTypeContainer").GetComponent<NPCsTypesContainer>().NpcPrefabs[recievedPackage.syncNPCs[i].modelId], MPClient.ConvertVector3(recievedPackage.syncNPCs[i].position),  Quaternion.Euler(MPClient.ConvertVector3(recievedPackage.syncNPCs[i].rot)));
+                    var gobj = Instantiate(GameObject.Find("NPCsTypeContainer").GetComponent<NPCsTypesContainer>().NpcPrefabs[recievedPackage.syncNPCs[i].modelId], MPVector3.ConvertVector3(recievedPackage.syncNPCs[i].position),  Quaternion.Euler(MPVector3.ConvertVector3(recievedPackage.syncNPCs[i].rot)));
                     syncNPCs.Add(new ClientNPC() { obj = gobj, info = new MPNpcInfo() {
                         id = recievedPackage.syncNPCs[i].id,
                     }});
@@ -247,7 +247,7 @@ public class MPClient : MonoBehaviour
                     ColorUtility.TryParseHtmlString(recievedPackage.syncNPCs[i].modelColor, out cclr);
                     mppuppet.SetModelColor(cclr, mppuppet.coloredPart);
                     mppuppet.CheckBattleState();
-                    mppuppet.viewObject.transform.position = MPClient.ConvertVector3(recievedPackage.syncNPCs[i].lookPos);
+                    mppuppet.viewObject.transform.position = MPVector3.ConvertVector3(recievedPackage.syncNPCs[i].lookPos);
                     //syncBullets[i].obj.GetComponent<Bullet>().client = this;
                     //syncBullets[i].obj.GetComponent<Bullet>().ownerId = recievedPackage.syncBullets[i].owner;
                 }
@@ -299,19 +299,19 @@ public class MPClient : MonoBehaviour
     public void UpdateScoreboard()
     {
 
-        List<MPServer.ScoreboardInfo> info = new List<MPServer.ScoreboardInfo>();
-        info.Add(new MPServer.ScoreboardInfo() {
+        List<ScoreboardInfo> info = new List<ScoreboardInfo>();
+        info.Add(new ScoreboardInfo() {
             mp_id = MPid,
             name = nickname,
             killCount = clientPlayer.GetComponent<PhysPuppet>().killCount
         });
         foreach(var player in playersInfo)
         {
-            info.Add(new MPServer.ScoreboardInfo()
+            info.Add(new ScoreboardInfo()
             {
                 mp_id = player.info.mp_id,
                 name = player.info.name,
-                killCount = player.gameObject.GetComponent<MPPuppet>().killCount
+                killCount = player.playerGameObject.GetComponent<MPPuppet>().killCount
             });
         }
         var panel = scoreboardPanel.GetComponent<RectTransform>();
@@ -416,33 +416,21 @@ public class MPClient : MonoBehaviour
         isBulletRequestCalled = true;
         lastBulletInfo = new MPBulletInfo()
         {
-            position = ConvertMPVector3(r_position),
-            velocity = ConvertMPVector3(r_velocity),
-            rot = ConvertMPVector3(r_rot),
+            position = MPVector3.ConvertMPVector3(r_position),
+            velocity = MPVector3.ConvertMPVector3(r_velocity),
+            rot = MPVector3.ConvertMPVector3(r_rot),
             owner = MPid
         };
     }
-    [Serializable]
-    public class MPBulletInfo
+    public struct ClientBullet
     {
-        public int id;
-        public MPVector3 velocity;
-        public MPVector3 position;
-        public string ip;
-        public float lifetime = 10f;
-        public int owner;
-        public MPVector3 rot;
-        public bool isDestroyRequested;
+        public GameObject obj;
+        public MPBulletInfo info;
     }
-    public class ClientBullet
+    public struct ClientNPC
     {
-        public GameObject obj = null;
-        public MPBulletInfo info = null;
-    }
-    public class ClientNPC
-    {
-        public GameObject obj = null;
-        public MPNpcInfo info = null;
+        public GameObject obj;
+        public MPNpcInfo info;
     }
     public void WriteConsoleMessage(string message, string prefix)
     {
@@ -477,60 +465,6 @@ public class MPClient : MonoBehaviour
     {
         tokenSource.Cancel();
     }
-    [Serializable]
-    public class MPClientInfo
-    {
-        public bool justGetServerInfo = false;
-        public int mp_id;
-        public string name;
-        public float speed;
-        public float x, y, z;
-        public float look_x, look_y, look_z;
-        public float rot;
-        public bool isDisconnected = false;
-        public int killCount = 0;
-        public int fightAnimType = 0;
-        public string ip = null;
-        public bool inBattle = false;
-        public bool isBulletRequested = false;
-        public MPBulletInfo bulletInfo = null;
-        public float health = 100;
-        public List<MPVector3> ragdollPositions = null;
-        public List<MPVector3> ragdollRotations = null;
-    }
-    [Serializable]
-    public class MPNpcInfo
-    {
-        public int id;
-        public int type;
-        public float speed;
-        public bool isDestroyRequested;
-        public bool isDestroyOnTime;
-        public float destroyTime;
-        public string modelColor;
-        public int modelId;
-        public int fightAnimType = 0;
-        public bool inBattle;
-        public bool idleAnim;
-        public int idleAnimId;
-        public bool inAttack;
-        public int AttackType;
-        public MPVector3 position;
-        public MPVector3 lookPos;
-        public MPVector3 rot;
-        public float health = 100;
-    }
-    [Serializable]
-    public struct MPVector3
-    {
-        public float x, y, z;
-        public MPVector3(float _x, float _y, float _z)
-        {
-            x = _x;
-            y = _y;
-            z = _z;
-        }
-    }
     public int GetBullet(List<ClientBullet> list, int id)
     {
         for(int i = 0; i < list.Count; i++)
@@ -553,7 +487,7 @@ public class MPClient : MonoBehaviour
         }
         return -1;
     }
-        public int GetPlayer(List<MPServer.PlayerInfo> list, int id)
+        public int GetPlayer(List<PlayerInfo> list, int id)
     {
         for(int i = 0; i < list.Count; i++)
         {
@@ -563,17 +497,5 @@ public class MPClient : MonoBehaviour
             }
         }
         return -1;
-    }
-    static public Vector3 ConvertVector3(MPVector3 vector)
-    {
-        return new Vector3(vector.x, vector.y, vector.z);
-    }
-    static public MPVector3 ConvertMPVector3(Vector3 vector)
-    {
-        return new MPVector3(){
-            x = vector.x,
-            y = vector.y,
-            z = vector.z
-        };
     }
 }
