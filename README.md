@@ -5,6 +5,7 @@ Already done:
 - Player synchronization.
 - NPC's synchronization.
 - Bullets, dealing damage.
+- Ragdoll Synchronization.
 
 Ending point of it, create a fully playable demo of the game. 
 There's no models/animations in this repository, to not deal with indication of the license for now, but all used assets is royalty-free/free for use.  
