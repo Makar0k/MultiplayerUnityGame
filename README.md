@@ -1,4 +1,4 @@
-# MultiplayerUnityGame
+# UDP Sockets based Multiplayer Unity Game
 This is the simple top-down mulitplayer shooter, based on UDP sockets connection.  
 It's mostly creates for educational purposes.  
 Already done:
