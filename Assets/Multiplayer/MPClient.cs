@@ -17,6 +17,7 @@ public class MPClient : MonoBehaviour
     private bool isSocketRevieved = true;
     public List<PlayerInfo> playersInfo;
     public string nickname = "A client Dude";
+    public MPClientInfo nonThreadedPlayerInfo;
     public int MPid = 0;
     [Header("Connection")]
     IPAddress ip;
@@ -35,6 +36,7 @@ public class MPClient : MonoBehaviour
     public List<ClientBullet> syncBullets;
     public List<ClientNPC> syncNPCs;
     string currentIp = null;
+    public List<byte[]> recievedPackages;
     Socket sender;
     IPEndPoint ipEndPoint;
     public bool isClientToGetServerInfo = false;
@@ -50,8 +52,12 @@ public class MPClient : MonoBehaviour
     List<GameObject> scoreboardElements;
     [SerializeField]
     TMPro.TMP_Text examplePlayerInfo;
+    bool packetIsRecieved = false;
     void Start()
     {
+        nonThreadedPlayerInfo = new MPClientInfo();
+        recievedPackage = new MPServer.ClientPackage();
+        recievedPackages = new List<byte[]>();
         if(scoreboardPanel != null)
         {
             scoreboardElements = new List<GameObject>();
@@ -72,6 +78,42 @@ public class MPClient : MonoBehaviour
         sender.SetSocketOption(SocketOptionLevel.Socket,SocketOptionName.ReuseAddress, true);
         ipEndPoint = new IPEndPoint(ip, port);
         sender.Connect(ipEndPoint);
+        if(!isClientToGetServerInfo)
+        {
+            Task.Run(() => {
+                while(true)
+                {
+                    if(tokenSource.IsCancellationRequested)
+                    {
+                        return;
+                    }
+                    try
+                    {
+                        if(tokenSource.IsCancellationRequested)
+                        {
+                            return;
+                        }
+                        // Sending request to the Server, then listen an answer
+                        // that all.
+                        SendToServer(port, nickname, ref nonThreadedPlayerInfo);
+                        packetIsRecieved = false;
+                        ListenFromServer(port, "Uchenik");
+                    }
+                    catch(Exception ex)
+                    {
+                        Debug.Log("ClientError Occured: " + ex.ToString());
+                    }
+                }
+            }, tokenSource.Token);
+        }
+        Task.Run(() => {
+            while(true)
+            {
+                DeserializePackages();
+                Thread.Sleep(10);
+            }
+        }
+        );
     }
     void OnEnable()
     {
@@ -82,32 +124,48 @@ public class MPClient : MonoBehaviour
     }
     void FixedUpdate()
     {
+        // Realization for main menu connection. Get players count, map and other stuff.
+        // Just don't want to create another class for it. But i think that it would be better
+        if(!isClientToGetServerInfo)
+        {
+            var lookObj = clientPlayer.GetComponent<PlayerController>().cursor.transform.position;
+            isSocketRevieved = false;
+            var pos = clientPlayer.transform.position;
+            var fanimType = clientPlayer.GetComponent<PlayerController>().fightAnimType;
+            var rot = clientPlayer.transform.rotation.eulerAngles.y;
+            var battleState = clientPlayer.GetComponent<PlayerController>().inBattle;
+            var playerSpeed = clientPlayer.GetComponent<PlayerController>().speed;
+            nonThreadedPlayerInfo = new MPClientInfo(){
+                x = pos.x,
+                y = pos.y,
+                z = pos.z,
+                speed = playerSpeed,
+                inBattle = battleState,
+                look_x = lookObj.x,
+                look_y = lookObj.y,
+                look_z = lookObj.z,
+                rot = rot,
+                fightAnimType = fanimType,
+                name = nickname,
+                mp_id = MPid,
+                ip = currentIp,
+                isBulletRequested = isBulletRequestCalled,
+                bulletInfo = (isBulletRequestCalled ? lastBulletInfo : null)
+            };
+        }
         if(isClientToGetServerInfo)
         {
             return;
         }
-        if(isSocketRevieved)
-        {
-            try
-            {
-               SendToServer(port, "Uchenik"); 
-            }
-            catch
-            {
-                isSocketRevieved = true;
-            }
-        }
         for(int i = 0; i < recievedPackage.players.Count; i++)
         {
-            if(recievedPackage.players[i].mp_id == MPid)
+            if(recievedPackage.players[i].mp_id == MPid && MPid != 0)
             {
                 var clientp = clientPlayer.GetComponent<PlayerController>();
                 clientp.SetHealth(recievedPackage.players[i].health);
                 clientp.killCount = recievedPackage.players[i].killCount;
-                
                 if(recievedPackage.players[i].health <= 0)
                     {
-                        Debug.Log("фыфыв " + recievedPackage.players[i].ragdollPositions.Count);
                         for(int d = 0; d < recievedPackage.players[i].ragdollPositions.Count; d++)
                         {
                             clientp.ragdollEntities[d].rotation = Quaternion.Euler(MPVector3.ConvertVector3(recievedPackage.players[i].ragdollRotations[d]));
@@ -220,6 +278,17 @@ public class MPClient : MonoBehaviour
                     mppuppet.destroyTime = recievedPackage.syncNPCs[i].destroyTime;
                     //syncNPCs[getid].obj.GetComponent<Bullet>().client = this;
                     //syncNPCs[getid].obj.GetComponent<Bullet>().ownerId = recievedPackage.syncNPCs[i].owner;
+                    if(recievedPackage.syncNPCs[i].ragdollPositions != null)
+                    {
+                        for(int d = 0; d < recievedPackage.syncNPCs[i].ragdollPositions.Count; d++)
+                        {
+                            if(mppuppet.ragdollEntities.Count > d)
+                            {
+                                mppuppet.ragdollEntities[d].rotation = Quaternion.Euler(MPVector3.ConvertVector3(recievedPackage.syncNPCs[i].ragdollRotations[d]));
+                                mppuppet.ragdollEntities[d].position =MPVector3.ConvertVector3(recievedPackage.syncNPCs[i].ragdollPositions[d]);
+                            }
+                        }
+                    }
                 if(recievedPackage.syncNPCs[i].isDestroyRequested) 
                 {
                     Destroy(syncNPCs[getid].obj);
@@ -253,7 +322,7 @@ public class MPClient : MonoBehaviour
                 }
             }
         }
-        /*foreach(var cmd in recievedPackage.cmdsSheldue)
+        foreach(var cmd in recievedPackage.cmdsSheldue)
         {
             switch(cmd.type)
             {
@@ -274,8 +343,8 @@ public class MPClient : MonoBehaviour
                     break;
                 }
             }
-        */
-        if(warmupPanel != null)
+        }
+        if(warmupPanel != null && recievedPackage.guiData != null)
         {
             if(recievedPackage.guiData.isWarmupShown)
             {
@@ -291,9 +360,7 @@ public class MPClient : MonoBehaviour
     }
     public MPServer.ClientPackage GetPackage()
     {
-        Debug.Log("Requesting...");
         RequestServerInfo(port, "test1");
-        Debug.Log("Done!");
         return recievedPackage;
     }
     public void UpdateScoreboard()
@@ -357,59 +424,61 @@ public class MPClient : MonoBehaviour
         int bytesRec = sender.ReceiveFrom(bytes, ref endPoint);
 
         recievedPackage = MPServer.DeserializeClientPackage(bytes);
-        isSocketRevieved = true;
-    
     }
-    public async void SendToServer(int port, string clientName)
+    public void ListenFromServer(int port, string clientName)
+    {
+        sender.ReceiveTimeout = 10;
+        currentIp = ip.Address.ToString();
+        EndPoint endPoint = ipEndPoint;
+        while(true)
+        {
+            try
+            {
+                if(packetIsRecieved)
+                {
+                    return;
+                }
+                byte[] bytes = new byte[8156];
+                int bytesRec = sender.ReceiveFrom(bytes, ref endPoint);
+                Debug.Log("Added Packet to List");
+                recievedPackages.Add(bytes);
+            }
+            catch(Exception ex)
+            {
+                packetIsRecieved = true;
+                Debug.Log("Client Error: " + ex.ToString());
+                return;
+            }
+        }
+    }
+    public void SendToServer(int port, string clientName, ref MPClientInfo ClientSendData)
     {
         currentIp = ip.Address.ToString();
-        var lookObj = clientPlayer.GetComponent<PlayerController>().cursor.transform.position;
-        isSocketRevieved = false;
-        byte[] bytes = new byte[64000];
-        var pos = clientPlayer.transform.position;
-        var fanimType = clientPlayer.GetComponent<PlayerController>().fightAnimType;
-        var rot = clientPlayer.transform.rotation.eulerAngles.y;
-        var battleState = clientPlayer.GetComponent<PlayerController>().inBattle;
-        var playerSpeed = clientPlayer.GetComponent<PlayerController>().speed;
-        await Task.Run(() => {
-        if(tokenSource.IsCancellationRequested)
-        {
-            return;
-        }
+        byte[] bytes = new byte[8156];
         byte[] info = SerializeClientInfo(new MPClientInfo(){
-            x = pos.x,
-            y = pos.y,
-            z = pos.z,
+            x = ClientSendData.x,
+            y = ClientSendData.y,
+            z = ClientSendData.z,
             speed = playerSpeed,
-            inBattle = battleState,
-            look_x = lookObj.x,
-            look_y = lookObj.y,
-            look_z = lookObj.z,
-            rot = rot,
-            fightAnimType = fanimType,
-            name = nickname,
+            inBattle = ClientSendData.inBattle,
+            look_x = ClientSendData.look_x,
+            look_y = ClientSendData.look_y,
+            look_z = ClientSendData.look_z,
+            rot = ClientSendData.rot,
+            fightAnimType = ClientSendData.fightAnimType,
+            name = clientName,
             mp_id = MPid,
             ip = currentIp,
             isBulletRequested = isBulletRequestCalled,
             bulletInfo = (isBulletRequestCalled ? lastBulletInfo : null)
         });
+        sender.SendTimeout = 10;
+        sender.SendBufferSize = 8156;
+        int bytesSent = sender.Send(info);
         if(isBulletRequestCalled)
         {
             isBulletRequestCalled = false;
         }
-        int bytesSent = sender.Send(info);
-        EndPoint endPoint = ipEndPoint;
-        int bytesRec = sender.ReceiveFrom(bytes, ref endPoint);
-        if(bytesRec > 4096)
-        {
-            WriteConsoleMessage("TO MUCH BYTES! " + bytesRec, "WARNING");
-        }
-
-        Thread.Sleep(10);
-        }, tokenSource.Token);
-        recievedPackage = MPServer.DeserializeClientPackage(bytes);
-        MPid = recievedPackage.mp_id;
-        isSocketRevieved = true;
     }
     public void RequestBullet(Vector3 r_position, Vector3 r_velocity, Vector3 r_rot)
     {
@@ -421,6 +490,82 @@ public class MPClient : MonoBehaviour
             rot = MPVector3.ConvertMPVector3(r_rot),
             owner = MPid
         };
+    }
+    public void DeserializePackages()
+    {
+        try
+        {
+            while(recievedPackages.Count > 0)
+            {
+                    var recievedPacket = DeserializePacket(recievedPackages[recievedPackages.Count - 1]);
+                    switch(recievedPacket.packetType)
+                    {
+                        case MPPacket.PacketType.PacketEnd:
+                        {
+                            packetIsRecieved = true;
+                            break;
+                        }
+                        case MPPacket.PacketType.PacketStart:
+                        {
+                            MPid = recievedPacket.packetOwnerId;
+                            break;
+                        }
+                        case MPPacket.PacketType.Player:
+                        {
+                            var packet = (MPClientInfo)recievedPacket;
+                            int ind = GetPlayer(recievedPackage.players, packet.mp_id);
+                            if(ind == -1)
+                            {
+                                recievedPackage.players.Add(packet);
+                            }
+                            else
+                            {
+                                recievedPackage.players[ind] = packet;
+                            }
+                            break;
+                        }
+                        case MPPacket.PacketType.Npc:
+                        {
+                            var packet = (MPNpcInfo)recievedPacket;
+                            int ind = GetNPC(recievedPackage.syncNPCs, packet.id);
+                            if(ind == -1)
+                            {
+                                recievedPackage.syncNPCs.Add(packet);
+                            }
+                            else
+                            {
+                                recievedPackage.syncNPCs[ind] = packet;
+                            }
+                            break;
+                        }
+                        case MPPacket.PacketType.Bullet:
+                        {
+                            var packet = (MPBulletInfo)recievedPacket;
+                            int ind = GetBullet(recievedPackage.syncBullets, packet.id);
+                            if(ind == -1)
+                            {
+                                recievedPackage.syncBullets.Add(packet);
+                            }
+                            else
+                            {
+                                recievedPackage.syncBullets[ind] = packet;
+                            }
+                            break;
+                        }
+                        case MPPacket.PacketType.Gui:
+                        {
+                            var packet = (MPGUIData)recievedPacket;
+                            recievedPackage.guiData = packet;
+                            break;
+                        }
+                    }
+                    recievedPackages.RemoveAt(recievedPackages.Count - 1);
+            }
+        }
+        catch(Exception ex)
+        {
+            Debug.Log(ex.ToString());
+        }
     }
     public struct ClientBullet
     {
@@ -436,7 +581,7 @@ public class MPClient : MonoBehaviour
     {
         Debug.Log("[" + prefix + "] " + message);
     }
-    static public byte[] SerializeClientInfo(MPClientInfo info)
+    static public byte[] SerializeClientInfo(MPPacket info)
     {
             byte[] result;
             BinaryFormatter bF = new BinaryFormatter();
@@ -461,6 +606,18 @@ public class MPClient : MonoBehaviour
             }
             return result;
     }
+    static public MPPacket DeserializePacket(byte[] info)
+    {
+            MPPacket result;
+            BinaryFormatter binFormatter = new BinaryFormatter();
+            using (MemoryStream memoryStream = new MemoryStream())
+            {
+                memoryStream.Write(info, 0, info.Length);
+                memoryStream.Position = 0;
+                result = (MPPacket)binFormatter.Deserialize(memoryStream);
+            }
+            return result;
+    }
     private void OnDisable()
     {
         tokenSource.Cancel();
@@ -470,6 +627,17 @@ public class MPClient : MonoBehaviour
         for(int i = 0; i < list.Count; i++)
         {
             if (list[i].info.id == id)
+            {
+                return i;
+            }
+        }
+        return -1;
+    }
+    public int GetBullet(List<MPBulletInfo> list, int id)
+    {
+        for(int i = 0; i < list.Count; i++)
+        {
+            if (list[i].id == id)
             {
                 return i;
             }
@@ -487,11 +655,33 @@ public class MPClient : MonoBehaviour
         }
         return -1;
     }
-        public int GetPlayer(List<PlayerInfo> list, int id)
+    public int GetNPC(List<MPNpcInfo> list, int id)
+    {
+        for(int i = 0; i < list.Count; i++)
+        {
+            if (list[i].id == id)
+            {
+                return i;
+            }
+        }
+        return -1;
+    }
+    public int GetPlayer(List<PlayerInfo> list, int id)
     {
         for(int i = 0; i < list.Count; i++)
         {
             if (list[i].info.mp_id == id)
+            {
+                return i;
+            }
+        }
+        return -1;
+    }
+    public int GetPlayer(List<MPClientInfo> list, int id)
+    {
+        for(int i = 0; i < list.Count; i++)
+        {
+            if (list[i].mp_id == id)
             {
                 return i;
             }

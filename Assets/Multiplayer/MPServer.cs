@@ -47,11 +47,23 @@ public class MPServer : MonoBehaviour
     GameObject scoreboardPanel;
     Vector2 panelStartSize;
     Vector3 panelStartPos;
+    // Host info
+    PlayerController playerController;
+    Vector3 hostPositon;
+    float playerRot;
+    Vector3 hostLookObj;
+    List<MPVector3> hostRagdollParts;
+    List<MPVector3> hostRagdollPartsRot;
+    List<MPBulletInfo> bulletsInfo;
+    List<MPNpcInfo> npcsInfo;
+    public List<byte[]> serializedPackages;
+    bool clientIsWarmuped = true;
     List<GameObject> scoreboardElements;
     [SerializeField]
     TMPro.TMP_Text examplePlayerInfo;
     void Start()
     {
+        serializedPackages = new List<byte[]>();
         scoreboardElements = new List<GameObject>();
         panelStartPos = scoreboardPanel.transform.position;
         panelStartSize = scoreboardPanel.GetComponent<RectTransform>().sizeDelta;
@@ -70,7 +82,22 @@ public class MPServer : MonoBehaviour
         hostPlayerPhysPuppet = hostPlayer.GetComponent<PhysPuppet>();
         ipEndPoint = new IPEndPoint(ipAddr, port);
         sListener = new Socket(ipAddr.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
-        RecieveClients();
+        // --------------------- Explanation -------------------------
+        // I've made some strange piece of... code, to send data from server
+        // to client fast as possible. I serialize all info on another
+        // thread into preready list of arrays of bytes. Sounds like not
+        // the best solution, but it's actually works fine. Plus multithreading
+        // experience (And knowledge of how it actually bad on clear unity)
+        // -------------------------------------------------------------
+        Task.Run(() => RecieveClients());
+        Task.Run(() => 
+        {
+            while(true)
+            {
+                SerializeAllInfo();
+                Thread.Sleep(10);
+            }
+        });
     }
     void OnEnable()
     {
@@ -78,13 +105,132 @@ public class MPServer : MonoBehaviour
     } 
     void FixedUpdate()
     {
+                // NON THREADABLE INFO. Need to send some data from scene to another thread.
+                // But i can't access to Unity's Monobehaviour functions and properties from
+                // different thread. Of course, it's one of the worst Unity's "Features".
+                // I believe that there's exist some solutions, like UniTask or smth.
+                for (int i = 0; i < playersInfo.Count; i++)
+                {
+                    if(playersInfo[i].info != null)
+                    {
+                        if(playersInfo.Count > nonThreadPlayerInfo.Count)
+                        {
+                            nonThreadPlayerInfo.Add(new PlayerInfo());
+                            nonThreadPlayerInfo[i] = new PlayerInfo();
+                            nonThreadPlayerInfo[i].info = new MPClientInfo();
+                        }
+                        else
+                        {
+                            nonThreadPlayerInfo[i].info.health = playersInfo[i].playerGameObject.GetComponent<PhysPuppet>().GetHealth();
+                            nonThreadPlayerInfo[i].info.ragdollPositions = new List<MPVector3>();
+                            nonThreadPlayerInfo[i].info.ragdollRotations = new List<MPVector3>();
+                            foreach(var element in playersInfo[i].playerGameObject.GetComponent<PhysPuppet>().ragdollEntities)
+                            {
+                                nonThreadPlayerInfo[i].info.ragdollPositions.Add(new MPVector3(element.position.x, element.position.y, element.position.z));
+                                nonThreadPlayerInfo[i].info.ragdollRotations.Add(new MPVector3(element.rotation.eulerAngles.x, element.rotation.eulerAngles.y, element.rotation.eulerAngles.z));
+                            }
+                            nonThreadPlayerInfo[i].info.killCount =  playersInfo[i].playerGameObject.GetComponent<PhysPuppet>().killCount;
+                        }
+                    }
+                }
+                // HOST SYNC | Reason is described on upper commentary.
+                // I need to send info of host player to another players,
+                // but sending method is in the another thread. So i just fill
+                // not Monobehaviour class with data and use it.
+                playerController = hostPlayer.GetComponent<PlayerController>();
+                hostPositon = hostPlayer.transform.position;
+                playerRot = hostPlayer.transform.rotation.eulerAngles.y;
+                hostLookObj = playerController.cursor.transform.position;
+                hostRagdollParts = new List<MPVector3>();
+                hostRagdollPartsRot = new List<MPVector3>();
+                foreach(var element in playerController.ragdollEntities)
+                {
+                    hostRagdollPartsRot.Add(new MPVector3(element.rotation.eulerAngles.x, element.rotation.eulerAngles.y, element.rotation.eulerAngles.z));
+                    hostRagdollParts.Add(new MPVector3(element.position.x, element.position.y, element.position.z));
+                }
+                hostPlayerInfo = new MPClientInfo() {
+                    x = hostPositon.x,
+                    y = hostPositon.y,
+                    z = hostPositon.z,
+                    ragdollPositions = ((!playerController.ragdoll.GetComponent<Rigidbody>().isKinematic) ? hostRagdollParts : null),
+                    ragdollRotations = ((!playerController.ragdoll.GetComponent<Rigidbody>().isKinematic) ? hostRagdollPartsRot : null),
+                    speed = playerController.speed,
+                    health = playerController.GetHealth(),
+                    look_x = hostLookObj.x,
+                    look_y = hostLookObj.y,
+                    look_z = hostLookObj.z,
+                    rot = playerRot,
+                    mp_id = 0,
+                    killCount = playerController.killCount,
+                    inBattle = playerController.inBattle,
+                    name = nickname
+                };
+                clientIsWarmuped = warmupPanel.activeSelf;
+                // ---------------------
+                bulletsInfo = new List<MPBulletInfo>();
+                for(int i = 0; i < SynchronizedBullets.Count; i++)
+                {
+                    var rb = SynchronizedBullets[i].gameObject.GetComponent<Rigidbody>();
+                    bulletsInfo.Add(new MPBulletInfo()
+                    {
+                        id = SynchronizedBullets[i].id,
+                        lifetime = SynchronizedBullets[i].gameObject.GetComponent<Bullet>().lifetime,
+                        velocity = MPVector3.ConvertMPVector3(SynchronizedBullets[i].gameObject.GetComponent<Rigidbody>().velocity),
+                        position = MPVector3.ConvertMPVector3(SynchronizedBullets[i].gameObject.transform.position),
+                        owner = SynchronizedBullets[i].gameObject.GetComponent<Bullet>().ownerId,
+                        rot = MPVector3.ConvertMPVector3(SynchronizedBullets[i].gameObject.transform.rotation.eulerAngles),
+                        isDestroyRequested = (SynchronizedBullets[i].gameObject.activeSelf ? false : true)
+                    });
+                }
+                // -------------------
+                npcsInfo = new List<MPNpcInfo>();
+                for(int i = 0; i < SynchronizedNPCs.Count; i++)
+                {
+                    var rb = SynchronizedNPCs[i].gameObject.GetComponent<Rigidbody>();
+                    var ai = SynchronizedNPCs[i].gameObject.GetComponent<AIController>();
+                        List<MPVector3> _ragdollPositions = null;
+                    List<MPVector3> _ragdollRotations = null;
+                    if(SynchronizedNPCs[i].gameObject.GetComponent<PhysPuppet>().GetHealth() <= 0)
+                    {
+                        _ragdollPositions = new List<MPVector3>();
+                        _ragdollRotations = new List<MPVector3>();
+                        foreach(var element in SynchronizedNPCs[i].gameObject.GetComponent<PhysPuppet>().ragdollEntities)
+                        {
+                            _ragdollPositions.Add(new MPVector3(element.position.x, element.position.y, element.position.z));
+                            _ragdollRotations.Add(new MPVector3(element.rotation.eulerAngles.x, element.rotation.eulerAngles.y, element.rotation.eulerAngles.z));
+                        }
+                    }
+                    npcsInfo.Add(new MPNpcInfo()
+                    {
+                        id = SynchronizedNPCs[i].id,
+                        type = SynchronizedNPCs[i].type,
+                        inBattle = ai.inBattle,
+                        speed = ai.speed,
+                        ragdollPositions = _ragdollPositions,
+                        ragdollRotations = _ragdollRotations,
+                        isDestroyOnTime = ai.isDestroyOnTime,
+                        destroyTime = ai.destroyTime,
+                        idleAnim = ai.specialIdleAnim,
+                        idleAnimId = ai.idleAnimId,
+                        modelId = ai.modelId,
+                        AttackType = ai.battleAttackType,
+                        inAttack = ai.inAttack,
+                        fightAnimType = ai.fightAnimType,
+                        modelColor = "#" + ColorUtility.ToHtmlStringRGBA(ai.modelColor),
+                        health = ai.GetHealth(),
+                        position = MPVector3.ConvertMPVector3(SynchronizedNPCs[i].gameObject.transform.position),
+                        lookPos = MPVector3.ConvertMPVector3(ai.lookDirObject.transform.position),
+                        rot = MPVector3.ConvertMPVector3(SynchronizedNPCs[i].gameObject.transform.rotation.eulerAngles),
+                        isDestroyRequested = (SynchronizedNPCs[i].gameObject.activeSelf ? false : true)
+                    });
+                }
         foreach(var player in playersInfo)
         {
             if(player == null)
             {
                 continue;
             }
-            /*player.conTimeOut += 1;
+            player.conTimeOut += 1;
             if(player.conTimeOut > 500)
             {
                 player.info.isDisconnected = true;
@@ -92,7 +238,7 @@ public class MPServer : MonoBehaviour
                 playersInfo.Remove(player);
                 playersCount -= 1;
                 Debug.Log("Player " + player.info.mp_id + " is disconnected");
-            }*/
+            }
         }
         for(int i = 0; i < playersInfo.Count; i++)
         {
@@ -139,158 +285,67 @@ public class MPServer : MonoBehaviour
             }
         }
     }
-    public async void RecieveClients()
+    public void RecieveClients()
     {
             sListener.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
             sListener.Bind(ipEndPoint);
             //sListener.Listen(10);
             while (true)
             {
-                Debug.Log("1");
-                // NON THREADABLE INFO. ДИКИЙ КОСТЫЛЬ ДЛЯ ТОГО ЧТОБЫ ПЕРЕДАТЬ В Task ДАННЫЕ ВНЕ НЕГО.
-                for (int i = 0; i < playersInfo.Count; i++)
+                try
                 {
-                    if(playersInfo[i].info != null)
-                    {
-                        Debug.Log("111");
-                        if(nonThreadPlayerInfo.ElementAtOrDefault(i) == null)
-                        {
-                            Debug.Log("1111");
-                            nonThreadPlayerInfo.Add(new PlayerInfo());
-                            nonThreadPlayerInfo[i].info = new MPClientInfo();
-                        }
-                        else
-                        {
-                            Debug.Log("Sending player " + playersInfo[i].info.mp_id + " that his killcount is " + playersInfo[i].info.killCount);
-                            nonThreadPlayerInfo[i].info.health = playersInfo[i].gameObject.GetComponent<PhysPuppet>().GetHealth();
-                            Debug.Log("RagdollEntities " + playersInfo[i].gameObject.GetComponent<PhysPuppet>().ragdollEntities.Count);
-                            nonThreadPlayerInfo[i].info.ragdollPositions = new List<MPVector3>();
-                            nonThreadPlayerInfo[i].info.ragdollRotations = new List<MPVector3>();
-                            foreach(var element in playersInfo[i].gameObject.GetComponent<PhysPuppet>().ragdollEntities)
-                            {
-                                nonThreadPlayerInfo[i].info.ragdollPositions.Add(new MPVector3(element.position.x, element.position.y, element.position.z));
-                                nonThreadPlayerInfo[i].info.ragdollRotations.Add(new MPVector3(element.rotation.eulerAngles.x, element.rotation.eulerAngles.y, element.rotation.eulerAngles.z));
-                            }
-                            nonThreadPlayerInfo[i].info.killCount =  playersInfo[i].gameObject.GetComponent<PhysPuppet>().killCount;
-                        }
-                    }
-                }
-                Debug.Log("2");
-                // HOST SYNC
-                var playerController = hostPlayer.GetComponent<PlayerController>();
-                var positon = hostPlayer.transform.position;
-                var playerRot = hostPlayer.transform.rotation.eulerAngles.y;
-                var lookObj = playerController.cursor.transform.position;
-                var hostRagdollParts = new List<MPVector3>();
-                var hostRagdollPartsRot = new List<MPVector3>();
-                foreach(var element in playerController.ragdollEntities)
-                {
-                    hostRagdollPartsRot.Add(new MPVector3(element.rotation.eulerAngles.x, element.rotation.eulerAngles.y, element.rotation.eulerAngles.z));
-                    hostRagdollParts.Add(new MPVector3(element.position.x, element.position.y, element.position.z));
-                }
-                Debug.Log("3");
-                hostPlayerInfo = new MPClientInfo() {
-                    x = positon.x,
-                    y = positon.y,
-                    z = positon.z,
-                    ragdollPositions = ((!playerController.ragdoll.GetComponent<Rigidbody>().isKinematic) ? hostRagdollParts : null),
-                    ragdollRotations = ((!playerController.ragdoll.GetComponent<Rigidbody>().isKinematic) ? hostRagdollPartsRot : null),
-                    speed = playerController.speed,
-                    health = playerController.GetHealth(),
-                    look_x = lookObj.x,
-                    look_y = lookObj.y,
-                    look_z = lookObj.z,
-                    rot = playerRot,
-                    mp_id = 0,
-                    killCount = playerController.killCount,
-                    inBattle = playerController.inBattle,
-                    name = nickname
-                };
-                var clientWarmuptime = warmupTime;
-                var clientIsWarmuped = warmupPanel.activeSelf;
-
-                var bulletsInfo = new List<MPBulletInfo>();
-                Debug.Log("4");
-                for(int i = 0; i < SynchronizedBullets.Count; i++)
-                {
-                    var rb = SynchronizedBullets[i].gameObject.GetComponent<Rigidbody>();
-                    bulletsInfo.Add(new MPBulletInfo()
-                    {
-                        id = SynchronizedBullets[i].id,
-                        lifetime = SynchronizedBullets[i].gameObject.GetComponent<Bullet>().lifetime,
-                        velocity = MPVector3.ConvertMPVector3(SynchronizedBullets[i].gameObject.GetComponent<Rigidbody>().velocity),
-                        position = MPVector3.ConvertMPVector3(SynchronizedBullets[i].gameObject.transform.position),
-                        owner = SynchronizedBullets[i].gameObject.GetComponent<Bullet>().ownerId,
-                        rot = MPVector3.ConvertMPVector3(SynchronizedBullets[i].gameObject.transform.rotation.eulerAngles),
-                        isDestroyRequested = (SynchronizedBullets[i].gameObject.activeSelf ? false : true)
-                    });
-                }
-                var npcsInfo = new List<MPNpcInfo>();
-                Debug.Log("5");
-                for(int i = 0; i < SynchronizedNPCs.Count; i++)
-                {
-                    var rb = SynchronizedNPCs[i].gameObject.GetComponent<Rigidbody>();
-                    var ai = SynchronizedNPCs[i].gameObject.GetComponent<AIController>();
-                    npcsInfo.Add(new MPNpcInfo()
-                    {
-                        id = SynchronizedNPCs[i].id,
-                        type = SynchronizedNPCs[i].type,
-                        inBattle = ai.inBattle,
-                        speed = ai.speed,
-                        isDestroyOnTime = ai.isDestroyOnTime,
-                        destroyTime = ai.destroyTime,
-                        idleAnim = ai.specialIdleAnim,
-                        idleAnimId = ai.idleAnimId,
-                        modelId = ai.modelId,
-                        AttackType = ai.battleAttackType,
-                        inAttack = ai.inAttack,
-                        fightAnimType = ai.fightAnimType,
-                        modelColor = "#" + ColorUtility.ToHtmlStringRGBA(ai.modelColor),
-                        health = ai.GetHealth(),
-                        position = MPVector3.ConvertMPVector3(SynchronizedNPCs[i].gameObject.transform.position),
-                        lookPos = MPVector3.ConvertMPVector3(ai.lookDirObject.transform.position),
-                        rot = MPVector3.ConvertMPVector3(SynchronizedNPCs[i].gameObject.transform.rotation.eulerAngles),
-                        isDestroyRequested = (SynchronizedNPCs[i].gameObject.activeSelf ? false : true)
-                    });
-                }
-                Debug.Log("6");
-                await Task.Run(() => {
                 if(tokenSource.IsCancellationRequested)
                 {
                     return;
                 }
+                
                 WriteConsoleMessage("Ожидаем соединение через порт " + ipEndPoint.Port.ToString(), "SERVER");
                 byte[] bytes = new byte[64000];
                 EndPoint remoteIp = new IPEndPoint(IPAddress.Any, port);
                 var result = sListener.ReceiveFrom(bytes, ref remoteIp);
+                if(result == 0)
+                {
+                    continue;
+                }
                 MPClientInfo data = MPClient.DeserializeClientInfo(bytes);
                 if(data.justGetServerInfo)
                 {
                     var serverInfoOnly = new ClientPackage();
                     serverInfoOnly.mapId = 1;
-                    byte[] msg1 = SerializeClientPackage(serverInfoOnly);
-                    sListener.SendTo(msg1, remoteIp);
-                    return;
+                    byte[] msg2 = SerializeClientPackage(serverInfoOnly);
+                    sListener.SendTo(msg2, remoteIp);
+                    continue;
                 }
                 var package = new ClientPackage();
                 if(data.mp_id == 0)
                 {
-                    Debug.Log("New user connected");
                     var maxp = 4;
+                    int ipind = -1;
+                    var remip = (IPEndPoint)remoteIp;
+                    for(int i = 0; i < playersInfo.Count; i++)
+                    {
+                        if(playersInfo[i].ip == remip.ToString())
+                        {
+                            ipind = i;
+                        }
+                    }
                     var id = FindFreeSlot(playersInfo, maxp);
-                    if(id != -1)
+                    Debug.Log("New user connected! His new id is " + id);
+                    if(id != -1 && ipind == -1)
                     {
                         data.mp_id = id;
                         playersInfo.Add(new PlayerInfo(){
                             id = playersCount,
-                            ip = remoteIp.ToString(),
+                            ip = remip.ToString(),
                             info = data,
                             playerGameObject = null
                         });
                         playersCount++;
                     }
-                    else
+                    else if(ipind != -1)
                     {
+                        //data.mp_id = playersInfo[ipind].id;
+                        Debug.Log("Player with same IP getting same ID " + playersInfo[ipind].id);
                         // Отправить клиенту что сервер полный и скинуть подключение
                     }
                 }
@@ -298,42 +353,91 @@ public class MPServer : MonoBehaviour
                 {
                     var ind = GetPlayer(playersInfo, data.mp_id);
                     package.cmdsSheldue = playersInfo[ind].cmdsSheldue;
+                    var brequest = (playersInfo.Count > ind) ? playersInfo[ind].info.isBulletRequested : false;
+                    var binfo = (playersInfo.Count > ind) ? playersInfo[ind].info.bulletInfo : null;
                     playersInfo[ind].cmdsSheldue = new List<MPCommand>();
                     playersInfo[ind].info = data;
-                    playersInfo[ind].conTimeOut = 0;
-                    playersInfo[ind].info.health = nonThreadPlayerInfo[ind].info.health;
-                    playersInfo[ind].info.ragdollRotations = nonThreadPlayerInfo[ind].info.ragdollRotations;
-                    playersInfo[ind].info.ragdollPositions = nonThreadPlayerInfo[ind].info.ragdollPositions;
-                    playersInfo[ind].info.killCount = nonThreadPlayerInfo[ind].info.killCount;
-                }
-                package.mp_id = data.mp_id;
-                package.guiData = new GUIData();
-                package.guiData.isWarmupShown = clientIsWarmuped;
-                package.guiData.warmupTime = clientWarmuptime;
-                package.mapId = 1;
-                // Sending Sync Info to Client. 0 player is always host.
-                package.players = new List<MPClientInfo>();
-                package.syncBullets = bulletsInfo;
-                package.syncNPCs = npcsInfo;
-                package.players.Add(hostPlayerInfo);
-                foreach (var player in playersInfo)
-                {
-                    if(player != null)
+                    // A way to synchronize tasks with Monobehaviour.
+                    if(brequest)
                     {
-                        package.players.Add(player.info);
+                        playersInfo[ind].info.isBulletRequested = true;
+                        playersInfo[ind].info.bulletInfo = binfo;
+                    }
+                    playersInfo[ind].conTimeOut = 0;
+                    if(playersInfo.Count <= nonThreadPlayerInfo.Count)
+                    {
+                        playersInfo[ind].info.health = nonThreadPlayerInfo[ind].info.health;
+                        playersInfo[ind].info.ragdollRotations = nonThreadPlayerInfo[ind].info.ragdollRotations;
+                        playersInfo[ind].info.ragdollPositions = nonThreadPlayerInfo[ind].info.ragdollPositions;
+                        playersInfo[ind].info.killCount = nonThreadPlayerInfo[ind].info.killCount;
                     }
                 }
-                Debug.Log("7");
-                byte[] msg = SerializeClientPackage(package);
+                System.Diagnostics.Stopwatch stw = new System.Diagnostics.Stopwatch();
+                stw.Start();
+                // ---------------------------------
+                var pstart = new MPPacket();
+                pstart.packetType = MPPacket.PacketType.PacketStart;
+                pstart.packetOwnerId = data.mp_id;
+                byte[] msg = SerializePackage(pstart);
                 sListener.SendTo(msg, remoteIp);
+                foreach(var message in serializedPackages)
+                {
+                    sListener.SendTo(message, remoteIp);
+                }
+                var pEnd = new MPPacket();
+                pEnd.packetType = MPPacket.PacketType.PacketEnd;
+                msg = SerializePackage(pEnd);
+                sListener.SendTo(msg, remoteIp);
+                // ------------------------------
+                stw.Stop();
+                Debug.Log("Elapsed Time " + stw.ElapsedMilliseconds);
                 Debug.Log("" + ((IPEndPoint)remoteIp).ToString());
                 if(tokenSource.IsCancellationRequested)
                 {
                     return;
                 }
-
-            }, tokenSource.Token);
+                }
+                catch(Exception ex)
+                {
+                    Debug.Log("Server Error Occured: " + ex.ToString());
+                }
             }
+    }
+    public void SerializeAllInfo()
+    {
+        try
+        {
+            byte[] msg;
+            var newSerializedPackages = new List<byte[]>();
+            foreach (var player in playersInfo)
+            {
+                msg = SerializePackage(player.info);
+                newSerializedPackages.Add(msg);
+            }
+            msg = SerializePackage(hostPlayerInfo);
+            newSerializedPackages.Add(msg);
+            foreach (var npc in npcsInfo)
+            {
+                msg = SerializePackage(npc);
+                newSerializedPackages.Add(msg);
+            }
+            foreach (var bullet in bulletsInfo)
+            {
+                msg = SerializePackage(bullet);
+                newSerializedPackages.Add(msg);
+            }
+            var guidata = new MPGUIData();
+            guidata.isWarmupShown = clientIsWarmuped;
+            guidata.warmupTime = warmupTime;
+            msg = SerializePackage(guidata);
+            newSerializedPackages.Add(msg);
+            serializedPackages = newSerializedPackages;
+
+        }
+        catch(Exception ex)
+        {
+            Debug.Log(ex.ToString());
+        }
     }
     public void CallCommandForAllPlayers(MPCommand command)
     {
@@ -404,7 +508,6 @@ public class MPServer : MonoBehaviour
         }
         foreach(var player in list)
         {
-            Debug.Log("Removing " + player.info.mp_id);
             slots.Remove(player.info.mp_id);
         }
         if(slots.Count != 0)
@@ -469,22 +572,29 @@ public class MPServer : MonoBehaviour
         public bool isDestroyRequested;
     }
     [Serializable]
-    public class GUIData
-    {
-        public bool isWarmupShown = false;
-        public float warmupTime = 0f;
-    }
-    [Serializable]
-    public struct ClientPackage
+    public class ClientPackage
     {
         public int mp_id;
         public string newbieIp;
         public int mapId;
-        public GUIData guiData;
-        public List<MPCommand> cmdsSheldue;
-        public List<MPClientInfo> players;
-        public List<MPBulletInfo> syncBullets;
-        public List<MPNpcInfo> syncNPCs;
+        public MPGUIData guiData;
+        public List<MPCommand> cmdsSheldue = new List<MPCommand>();
+        public List<MPClientInfo> players = new List<MPClientInfo>();
+        public List<MPBulletInfo> syncBullets = new List<MPBulletInfo>();
+        public List<MPNpcInfo> syncNPCs = new List<MPNpcInfo>();
+    }
+    static public byte[] SerializePackage(MPPacket info)
+    {
+            byte[] result;
+            BinaryFormatter bF = new BinaryFormatter();
+            using (MemoryStream mS = new MemoryStream())
+            {
+                bF.Serialize(mS, info);
+                mS.Position = 0;
+                result = new byte[mS.Length];
+                mS.Read(result, 0, result.Length);
+            }
+            return result;
     }
     static public byte[] SerializeClientPackage(ClientPackage info)
     {
@@ -512,6 +622,18 @@ public class MPServer : MonoBehaviour
                 memoryStream.Write(info, 0, info.Length);
                 memoryStream.Position = 0;
                 result = (ClientPackage)binFormatter.Deserialize(memoryStream);
+            }
+            return result;
+    }
+    static public MPClientInfo DeserializePackage(byte[] info)
+    {
+            MPClientInfo result = new MPClientInfo();
+            BinaryFormatter binFormatter = new BinaryFormatter();
+            using (MemoryStream memoryStream = new MemoryStream())
+            {
+                memoryStream.Write(info, 0, info.Length);
+                memoryStream.Position = 0;
+                result = (MPClientInfo)binFormatter.Deserialize(memoryStream);
             }
             return result;
     }

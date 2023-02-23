@@ -70,7 +70,7 @@ public class EnemyAIController : AIController
             }
             foreach(var player in players)
             {
-                var distToPlayer = Vector3.Distance(transform.position, player.gameObject.transform.position);
+                var distToPlayer = Vector3.Distance(transform.position, player.playerGameObject.transform.position);
                 if(distToPlayer < lastDist)
                 {
                     if(player.info.health > 0)

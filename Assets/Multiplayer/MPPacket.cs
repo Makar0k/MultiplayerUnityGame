@@ -4,15 +4,18 @@ using System;
 using UnityEngine;
 
 [Serializable]
-public abstract class MPPacket
+public class MPPacket
 {
     public PacketType packetType;
+    public int packetOwnerId = 0;
     public enum PacketType
     {
         Player,
         Bullet,
         Npc,
         Gui,
-        Command
+        Command,
+        PacketStart,
+        PacketEnd
     }
 }

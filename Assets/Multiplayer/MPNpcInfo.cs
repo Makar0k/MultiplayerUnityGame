@@ -23,6 +23,8 @@ public class MPNpcInfo : MPPacket
         public MPVector3 position;
         public MPVector3 lookPos;
         public MPVector3 rot;
+        public List<MPVector3> ragdollPositions = null;
+        public List<MPVector3> ragdollRotations = null;
         public float health = 100;
     public MPNpcInfo()
     {

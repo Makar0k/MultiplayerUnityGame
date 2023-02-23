@@ -97,7 +97,7 @@ public class Bullet : MonoBehaviour
                         }
                         else
                         {
-                            server.GetPlayers()[ownerId].gameObject.GetComponent<MPPuppet>().killCount++;
+                            server.GetPlayers()[ownerId].playerGameObject.GetComponent<MPPuppet>().killCount++;
                         }
                     }
                 }
