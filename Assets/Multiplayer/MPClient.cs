@@ -34,7 +34,9 @@ public class MPClient : MonoBehaviour
     public bool isBulletRequestCalled = false;
     public MPBulletInfo lastBulletInfo = null;
     public List<ClientBullet> syncBullets;
+    public List<ClientProp> syncProps;
     public List<ClientNPC> syncNPCs;
+    public PropsList propTypes;
     string currentIp = null;
     public List<byte[]> recievedPackages;
     Socket sender;
@@ -66,6 +68,7 @@ public class MPClient : MonoBehaviour
         }
         syncBullets = new List<ClientBullet>();
         syncNPCs = new List<ClientNPC>();
+        syncProps = new List<ClientProp>();
         if(!isClientToGetServerInfo)
         {
             clientPlayer.GetComponent<PlayerController>().isClient = true;
@@ -258,6 +261,27 @@ public class MPClient : MonoBehaviour
                 }
             }
         }
+        for(int i = 0; i < recievedPackage.syncProps.Count; i++)
+        {
+            int getid = GetProp(syncProps, recievedPackage.syncProps[i].id);
+            if(getid != -1)
+            {
+                    syncProps[getid].obj.transform.position = Vector3.Lerp(syncProps[getid].obj.transform.position, MPVector3.ConvertVector3(recievedPackage.syncProps[i].position), Time.fixedDeltaTime * 10);  
+                    syncProps[getid].obj.transform.rotation = Quaternion.Euler(MPVector3.ConvertVector3(recievedPackage.syncProps[i].rotation));
+            }
+            else
+            {
+                var gobj = Instantiate(propTypes.props[recievedPackage.syncProps[i].propId], MPVector3.ConvertVector3(recievedPackage.syncProps[i].position),  Quaternion.Euler(MPVector3.ConvertVector3(recievedPackage.syncProps[i].rotation)));
+                syncProps.Add(new ClientProp() 
+                { 
+                    obj = gobj, 
+                    info = new MPDynamicPropInfo() 
+                    {
+                        id = recievedPackage.syncProps[i].id,
+                    }
+                });
+            }
+        }
         for(int i = 0; i < recievedPackage.syncNPCs.Count; i++)
         {
             int getid = GetNPC(syncNPCs, recievedPackage.syncNPCs[i].id);
@@ -408,22 +432,31 @@ public class MPClient : MonoBehaviour
     public void RequestServerInfo(int port, string clientName)
     {
         Start();
-        ip  = IPAddress.Parse(IPAdress);
-        currentIp = ip.Address.ToString();
-        //var lookObj = clientPlayer.GetComponent<PlayerController>().cursor.transform.position;
-        isSocketRevieved = false;
-        byte[] bytes = new byte[64000];
+        try
+        {
+            sender.ReceiveTimeout = 100;
+            sender.SendTimeout = 100;
+            ip  = IPAddress.Parse(IPAdress);
+            currentIp = ip.Address.ToString();
+            //var lookObj = clientPlayer.GetComponent<PlayerController>().cursor.transform.position;
+            isSocketRevieved = false;
+            byte[] bytes = new byte[64000];
 
-        byte[] info = SerializeClientInfo(new MPClientInfo(){
-            name = nickname,
-            ip = currentIp,
-            justGetServerInfo = true,
-        });
-        int bytesSent = sender.Send(info);
-        EndPoint endPoint = ipEndPoint;
-        int bytesRec = sender.ReceiveFrom(bytes, ref endPoint);
+            byte[] info = SerializeClientInfo(new MPClientInfo(){
+                name = nickname,
+                ip = currentIp,
+                justGetServerInfo = true,
+            });
+            int bytesSent = sender.Send(info);
+            EndPoint endPoint = ipEndPoint;
+            int bytesRec = sender.ReceiveFrom(bytes, ref endPoint);
 
-        recievedPackage = MPServer.DeserializeClientPackage(bytes);
+            recievedPackage = MPServer.DeserializeClientPackage(bytes);
+        }
+        catch(Exception ex)
+        {
+            Debug.Log(ex.ToString());
+        }
     }
     public void ListenFromServer(int port, string clientName)
     {
@@ -505,6 +538,20 @@ public class MPClient : MonoBehaviour
                             packetIsRecieved = true;
                             break;
                         }
+                        case MPPacket.PacketType.Prop:
+                        {
+                            var packet = (MPDynamicPropInfo)recievedPacket;
+                            int ind = GetProp(recievedPackage.syncProps, packet.id);
+                            if(ind == -1)
+                            {
+                                recievedPackage.syncProps.Add(packet);
+                            }
+                            else
+                            {
+                                recievedPackage.syncProps[ind] = packet;
+                            }
+                            break;
+                        }
                         case MPPacket.PacketType.PacketStart:
                         {
                             MPid = recievedPacket.packetOwnerId;
@@ -572,6 +619,11 @@ public class MPClient : MonoBehaviour
         public GameObject obj;
         public MPBulletInfo info;
     }
+    public struct ClientProp
+    {
+        public GameObject obj;
+        public MPDynamicPropInfo info;
+    }
     public struct ClientNPC
     {
         public GameObject obj;
@@ -634,6 +686,28 @@ public class MPClient : MonoBehaviour
         return -1;
     }
     public int GetBullet(List<MPBulletInfo> list, int id)
+    {
+        for(int i = 0; i < list.Count; i++)
+        {
+            if (list[i].id == id)
+            {
+                return i;
+            }
+        }
+        return -1;
+    }
+    public int GetProp(List<ClientProp> list, int id)
+    {
+        for(int i = 0; i < list.Count; i++)
+        {
+            if (list[i].info.id == id)
+            {
+                return i;
+            }
+        }
+        return -1;
+    }
+    public int GetProp(List<MPDynamicPropInfo> list, int id)
     {
         for(int i = 0; i < list.Count; i++)
         {

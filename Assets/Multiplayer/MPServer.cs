@@ -33,10 +33,12 @@ public class MPServer : MonoBehaviour
     CancellationTokenSource tokenSource;
     public Transform CubeTest;
     public List<BulletGameObject> SynchronizedBullets;
+    public List<PropGameObject> SynchronizedProps;
     public List<NPCGameObject> SynchronizedNPCs;
     PhysPuppet hostPlayerPhysPuppet;
     int lastBulletId = 0;
     int lastNpcId = 0;
+    int lastPropId = 0;
     protected MPClientInfo hostPlayerInfo;
     [Header("A GUI Stuff")]
     [SerializeField]
@@ -56,6 +58,7 @@ public class MPServer : MonoBehaviour
     List<MPVector3> hostRagdollPartsRot;
     List<MPBulletInfo> bulletsInfo;
     List<MPNpcInfo> npcsInfo;
+    List<MPDynamicPropInfo> propsInfo;
     public List<byte[]> serializedPackages;
     bool clientIsWarmuped = true;
     List<GameObject> scoreboardElements;
@@ -222,6 +225,18 @@ public class MPServer : MonoBehaviour
                         lookPos = MPVector3.ConvertMPVector3(ai.lookDirObject.transform.position),
                         rot = MPVector3.ConvertMPVector3(SynchronizedNPCs[i].gameObject.transform.rotation.eulerAngles),
                         isDestroyRequested = (SynchronizedNPCs[i].gameObject.activeSelf ? false : true)
+                    });
+                }
+                propsInfo = new List<MPDynamicPropInfo>();
+                for(int i = 0; i < SynchronizedProps.Count; i++)
+                {
+                    propsInfo.Add(new MPDynamicPropInfo()
+                    {
+                        id = SynchronizedProps[i].id,
+                        position = MPVector3.ConvertMPVector3(SynchronizedProps[i].gameObject.transform.position),
+                        rotation = MPVector3.ConvertMPVector3(SynchronizedProps[i].gameObject.transform.rotation.eulerAngles),
+                        size = MPVector3.ConvertMPVector3(SynchronizedProps[i].gameObject.transform.localScale),
+                        propId = SynchronizedProps[i].type
                     });
                 }
         foreach(var player in playersInfo)
@@ -421,6 +436,11 @@ public class MPServer : MonoBehaviour
                 msg = SerializePackage(npc);
                 newSerializedPackages.Add(msg);
             }
+            foreach (var prop in propsInfo)
+            {
+                msg = SerializePackage(prop);
+                newSerializedPackages.Add(msg);
+            }
             foreach (var bullet in bulletsInfo)
             {
                 msg = SerializePackage(bullet);
@@ -530,6 +550,20 @@ public class MPServer : MonoBehaviour
         });
         lastNpcId++;
     }
+    public void SynchronizeDynamicProp(GameObject propGameObject, int _type)
+    {
+        if(SynchronizedProps == null)
+        {
+            SynchronizedProps = new List<PropGameObject>();
+        }
+        SynchronizedProps.Add(new PropGameObject(){
+            id = lastPropId,
+            gameObject = propGameObject,
+            isDestroyRequested = false,
+            type = _type
+        });
+        lastPropId++;
+    }
     public int GetPlayer(List<PlayerInfo> list, int id)
     {
         for(int i = 0; i < list.Count; i++)
@@ -564,6 +598,13 @@ public class MPServer : MonoBehaviour
         public GameObject gameObject;
         public bool isDestroyRequested;
     }
+    public struct PropGameObject
+    {
+        public int id;
+        public int type;
+        public GameObject gameObject;
+        public bool isDestroyRequested;
+    }
     public struct NPCGameObject
     {
         public int id;
@@ -582,6 +623,7 @@ public class MPServer : MonoBehaviour
         public List<MPClientInfo> players = new List<MPClientInfo>();
         public List<MPBulletInfo> syncBullets = new List<MPBulletInfo>();
         public List<MPNpcInfo> syncNPCs = new List<MPNpcInfo>();
+        public List<MPDynamicPropInfo> syncProps = new List<MPDynamicPropInfo>();
     }
     static public byte[] SerializePackage(MPPacket info)
     {

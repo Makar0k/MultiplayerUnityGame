@@ -16,6 +16,7 @@ public class MPPacket
         Gui,
         Command,
         PacketStart,
-        PacketEnd
+        PacketEnd,
+        Prop
     }
 }
