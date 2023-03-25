@@ -12,5 +12,5 @@ There's no models/animations in this repository, to not deal with indication of 
 
 Current version showcase:
 
-![preview](https://user-images.githubusercontent.com/57058885/227733306-09ce52ae-38b7-4ab6-b232-5d7e6bfb9a1d.mp4)
+https://user-images.githubusercontent.com/57058885/227733306-09ce52ae-38b7-4ab6-b232-5d7e6bfb9a1d.mp4
 
