@@ -7,6 +7,7 @@ public abstract class PhysPuppet : MonoBehaviour
 {
     [SerializeField]
     protected float health = 100f;
+    protected int currentFloor = 0;
     public int killCount = 0;
     [SerializeField]
     [Header("Animation Rigging")]
@@ -272,6 +273,10 @@ public abstract class PhysPuppet : MonoBehaviour
     {
         health = _health;
         TurnRagdoll(false);
+    }
+    public virtual void ChangeFloor(int floor)
+    {
+        currentFloor = floor;
     }
     void OnDestroy()
     {

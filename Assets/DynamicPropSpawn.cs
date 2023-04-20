@@ -16,6 +16,7 @@ public class DynamicPropSpawn : MonoBehaviour
     MPClient client;
     [SerializeField]
     float timer = 2;
+    public bool isSolidOnClient = false;
     void FixedUpdate()
     {
         if(server.enabled)
@@ -24,7 +25,7 @@ public class DynamicPropSpawn : MonoBehaviour
             {
                 var gobj = Instantiate(propsList.props[type], this.transform.position, this.transform.rotation);
                 gobj.transform.localScale = size;
-                server.SynchronizeDynamicProp(gobj, type);
+                server.SynchronizeDynamicProp(gobj, type, isSolidOnClient);
             }
             else
             {

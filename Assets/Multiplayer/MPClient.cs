@@ -31,6 +31,7 @@ public class MPClient : MonoBehaviour
     CancellationTokenSource tokenSource;
     PhysPuppet playerPhysPuppet;
     float playerSpeed;
+    public bool dynamicPropSync = true;
     public bool isBulletRequestCalled = false;
     public MPBulletInfo lastBulletInfo = null;
     public List<ClientBullet> syncBullets;
@@ -266,12 +267,30 @@ public class MPClient : MonoBehaviour
             int getid = GetProp(syncProps, recievedPackage.syncProps[i].id);
             if(getid != -1)
             {
+                if(!dynamicPropSync)
+                {
+                    syncProps[getid].obj.SetActive(false);
+                }
+                else
+                {
+                        syncProps[getid].obj.SetActive(true);
                     syncProps[getid].obj.transform.position = Vector3.Lerp(syncProps[getid].obj.transform.position, MPVector3.ConvertVector3(recievedPackage.syncProps[i].position), Time.fixedDeltaTime * 10);  
                     syncProps[getid].obj.transform.rotation = Quaternion.Euler(MPVector3.ConvertVector3(recievedPackage.syncProps[i].rotation));
+                }
             }
             else
             {
+                if(!dynamicPropSync)
+                {
+                    continue;
+                }
                 var gobj = Instantiate(propTypes.props[recievedPackage.syncProps[i].propId], MPVector3.ConvertVector3(recievedPackage.syncProps[i].position),  Quaternion.Euler(MPVector3.ConvertVector3(recievedPackage.syncProps[i].rotation)));
+                gobj.transform.localScale = MPVector3.ConvertVector3(recievedPackage.syncProps[i].size);
+                if(!recievedPackage.syncProps[i].isSolidOnClient)
+                {
+                    gobj.GetComponent<Collider>().enabled = false;
+                    gobj.GetComponent<Rigidbody>().isKinematic = true;
+                }
                 syncProps.Add(new ClientProp() 
                 { 
                     obj = gobj, 

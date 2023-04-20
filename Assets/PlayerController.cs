@@ -44,12 +44,14 @@ public class PlayerController : PhysPuppet
     private float shotAngling = 0;
     [SerializeField]
     private Transform shotFacingObject;
+    private FloorController floorController;
     [SerializeField]
     private float additionalShotRot;
     new void Start()
     {
         base.Start();
-        cameraLayerMask = ~(LayerMask.GetMask("Player") | LayerMask.GetMask("IgnoreCursor"));
+        floorController = GameObject.Find("FloorController").GetComponent<FloorController>();
+        cameraLayerMask = ~(LayerMask.GetMask("Player") | LayerMask.GetMask("FloorController") | LayerMask.GetMask("Dev") | LayerMask.GetMask("IgnoreCursor"));
     }
 
     new void Update()
@@ -162,6 +164,10 @@ public class PlayerController : PhysPuppet
     public override void Kill()
     {
         TurnRagdoll(true);
+    }
+    public override void ChangeFloor(int floor)
+    {
+        floorController.UpdateFloor(floor);
     }
 }
 

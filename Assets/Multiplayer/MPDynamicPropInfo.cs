@@ -10,6 +10,7 @@ public class MPDynamicPropInfo : MPPacket
     public MPVector3 rotation;
     public MPVector3 position;
     public MPVector3 size;
+    public bool isSolidOnClient;
     public MPDynamicPropInfo()
     {
         packetType = PacketType.Prop;

@@ -10,22 +10,31 @@ public class MPController : MonoBehaviour
     MPClient client;
     void Start()
     {
-        GameObject.Find("MPData").TryGetComponent<MPData>(out mpData);
-        if(mpData != null)
+        try
         {
-            if(mpData.connType == MPData.ConnectionType.Server)
+            GameObject.Find("MPData").TryGetComponent<MPData>(out mpData);
+            if(mpData != null)
             {
-                server = GameObject.Find("SERVER").GetComponent<MPServer>();
-                server.port = mpData.port;
-                server.enabled = true;
+                if(mpData.connType == MPData.ConnectionType.Server)
+                {
+                    server = GameObject.Find("SERVER").GetComponent<MPServer>();
+                    server.port = mpData.port;
+                    server.enabled = true;
+                }
+                if(mpData.connType == MPData.ConnectionType.Client)
+                {
+                    client = GameObject.Find("CLIENT").GetComponent<MPClient>();
+                    client.port = mpData.port;
+                    client.IPAdress = mpData.ip;
+                    client.enabled = true;
+                }
             }
-            if(mpData.connType == MPData.ConnectionType.Client)
-            {
-                client = GameObject.Find("CLIENT").GetComponent<MPClient>();
-                client.port = mpData.port;
-                client.IPAdress = mpData.ip;
-                client.enabled = true;
-            }
+        }
+        catch
+        {
+            server = GameObject.Find("SERVER").GetComponent<MPServer>();
+            server.port = 25565;
+            server.enabled = true;
         }
     }
 

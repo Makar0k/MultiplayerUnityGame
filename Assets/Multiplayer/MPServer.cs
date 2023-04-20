@@ -233,6 +233,7 @@ public class MPServer : MonoBehaviour
                     propsInfo.Add(new MPDynamicPropInfo()
                     {
                         id = SynchronizedProps[i].id,
+                        isSolidOnClient = SynchronizedProps[i].isSolidOnClient,
                         position = MPVector3.ConvertMPVector3(SynchronizedProps[i].gameObject.transform.position),
                         rotation = MPVector3.ConvertMPVector3(SynchronizedProps[i].gameObject.transform.rotation.eulerAngles),
                         size = MPVector3.ConvertMPVector3(SynchronizedProps[i].gameObject.transform.localScale),
@@ -550,7 +551,7 @@ public class MPServer : MonoBehaviour
         });
         lastNpcId++;
     }
-    public void SynchronizeDynamicProp(GameObject propGameObject, int _type)
+    public void SynchronizeDynamicProp(GameObject propGameObject, int _type, bool _isSolidOnClient)
     {
         if(SynchronizedProps == null)
         {
@@ -559,6 +560,7 @@ public class MPServer : MonoBehaviour
         SynchronizedProps.Add(new PropGameObject(){
             id = lastPropId,
             gameObject = propGameObject,
+            isSolidOnClient = _isSolidOnClient,
             isDestroyRequested = false,
             type = _type
         });
@@ -602,6 +604,7 @@ public class MPServer : MonoBehaviour
     {
         public int id;
         public int type;
+        public bool isSolidOnClient;
         public GameObject gameObject;
         public bool isDestroyRequested;
     }
